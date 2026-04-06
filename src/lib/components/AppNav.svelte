@@ -85,7 +85,7 @@
   }
 
   .nav-btn.active {
-    color: var(--color-accent);
+    color: var(--color-text-1);
   }
 
   /* Active indicator bar at top */
