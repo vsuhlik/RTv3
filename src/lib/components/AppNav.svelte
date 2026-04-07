@@ -1,7 +1,6 @@
 <script>
   import { currentTab, TABS, navigateTo } from '$lib/stores/navigation.js';
 
-  // SVG paths for each tab icon — inline for performance
   const ICONS = {
     today:     '<circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>',
     journey:   '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
@@ -11,7 +10,6 @@
     community: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
   };
 
-  /** Optional badges — { community: 3 } shows a dot on that tab */
   let { badges = {} } = $props();
 </script>
 
@@ -26,10 +24,10 @@
       aria-label={tab.label}
       aria-current={isActive ? 'page' : undefined}
     >
+      <span class="nav-dot" aria-hidden="true"></span>
       <span class="nav-icon-wrap">
         <svg
-          width="19"
-          height="19"
+          width="21" height="21"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -44,7 +42,6 @@
           <span class="nav-badge" aria-hidden="true"></span>
         {/if}
       </span>
-      <span class="nav-label">{tab.label}</span>
     </button>
   {/each}
 </nav>
@@ -52,18 +49,16 @@
 <style>
   .app-nav {
     position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
+    bottom: 0; left: 0; right: 0;
     max-width: 480px;
     margin: 0 auto;
     display: flex;
     background: var(--color-surface-1);
-    border-top: 1px solid rgba(196,145,58,0.12);
+    border-top: 1px solid var(--color-edge);
     padding-bottom: env(safe-area-inset-bottom, 0px);
     z-index: 30;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
   }
 
   .nav-btn {
@@ -72,34 +67,30 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2px;
-    padding: 7px 2px 6px;
+    gap: 4px;
+    padding: 10px 2px 8px;
     background: none;
     border: none;
     cursor: pointer;
     color: var(--color-text-4);
-    transition: color 200ms;
-    /* Tap target */
-    min-height: 56px;
+    transition: color 180ms;
+    min-height: 58px;
     position: relative;
   }
 
-  .nav-btn.active {
-    color: var(--color-text-1);
+  .nav-btn.active { color: var(--color-accent); }
+
+  .nav-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: transparent;
+    transition: background 180ms;
+    flex-shrink: 0;
   }
 
-  /* Active indicator bar at top */
-  .nav-btn.active::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 20px;
-    height: 2px;
-    border-radius: 0 0 2px 2px;
+  .nav-btn.active .nav-dot {
     background: var(--color-accent);
-    box-shadow: 0 0 8px rgba(196,145,58,0.5);
   }
 
   .nav-icon-wrap {
@@ -113,27 +104,14 @@
 
   .nav-badge {
     position: absolute;
-    top: -1px;
-    right: -3px;
-    width: 7px;
-    height: 7px;
+    top: -2px; right: -4px;
+    width: 7px; height: 7px;
     border-radius: 50%;
     background: var(--color-critical);
     border: 1.5px solid var(--color-surface-1);
   }
 
-  .nav-label {
-    font-size: 9px;
-    font-weight: 600;
-    letter-spacing: 0.03em;
-    font-family: var(--font-sans);
-    line-height: 1;
-  }
-
-  /* Hover — desktop / tablet preview */
   @media (hover: hover) {
-    .nav-btn:not(.active):hover {
-      color: var(--color-text-2);
-    }
+    .nav-btn:not(.active):hover { color: var(--color-text-2); }
   }
 </style>

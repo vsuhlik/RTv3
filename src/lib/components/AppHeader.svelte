@@ -1,32 +1,23 @@
 <script>
-  // SVELTE 5: Destructure props from $props()
-  let { 
-    ciLabel = 'CI-0', 
-    profileName = 'Restorer', 
-    onProfileClick, 
-    onCIClick 
+  let {
+    ciLabel = 'CI-0',
+    profileName = 'Restorer',
+    onProfileClick,
+    onCIClick,
   } = $props();
 </script>
 
 <header class="app-header">
   <div class="header-left">
-    <div class="wordmark">
-      <span class="wordmark-text">RESTORETRACK</span>
-      <span class="wordmark-version">v3.0</span>
-    </div>
+    <span class="wordmark">RESTORETRACK</span>
     <div class="header-sep" aria-hidden="true"></div>
-    
     <button class="ci-pill" onclick={onCIClick} title="Go to Journey">
       {ciLabel}
     </button>
   </div>
 
-  <button class="profile-btn" onclick={onProfileClick}>
+  <button class="profile-btn" onclick={onProfileClick} aria-label="Profile">
     <span class="profile-initial">{profileName.charAt(0).toUpperCase()}</span>
-    <span class="profile-name">{profileName}</span>
-    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-      <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>
   </button>
 </header>
 
@@ -35,96 +26,76 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 9px 16px;
-    background: linear-gradient(180deg, var(--color-surface-2) 0%, var(--color-surface-1) 100%);
-    border-bottom: 1px solid rgba(196,145,58,0.15);
+    padding: 10px 18px;
+    background: var(--color-surface-1);
+    border-bottom: 1px solid var(--color-edge);
     position: sticky;
     top: 0;
     z-index: 30;
-    backdrop-filter: blur(12px);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
   }
 
   .header-left {
     display: flex;
     align-items: center;
-    gap: 10px;
-    flex: 1;
+    gap: 12px;
   }
 
-  .wordmark-text {
-    font-family: var(--font-display);
-    font-size: 10.5px;
-    font-weight: 700;
-    color: var(--color-accent);
-    letter-spacing: 0.18em;
-  }
-
-  .wordmark-version {
-    font-size: 8px;
-    font-weight: 500;
-    color: var(--color-text-4);
-    margin-left: 4px;
-    opacity: 0.6;
-  }
-
-  .header-sep {
-    width: 1px;
-    height: 14px;
-    background: var(--color-edge);
-    opacity: 0.5;
-  }
-
-  .ci-pill {
-    background: var(--color-accent-tint);
-    border: 1px solid var(--color-accent-ring);
-    border-radius: var(--radius-pill);
-    padding: 3px 11px;
-    font-family: var(--font-display);
-    font-size: 10.5px;
-    font-weight: 600;
-    color: var(--color-accent);
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .ci-pill:hover {
-    background: var(--color-accent);
-    color: var(--color-surface-1);
-  }
-
-  .profile-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: rgba(255,255,255,0.03);
-    border: 1px solid var(--color-edge);
-    border-radius: var(--radius-pill);
-    padding: 4px 10px 4px 4px;
-    cursor: pointer;
-    transition: background 0.2s ease;
-  }
-
-  .profile-btn:hover {
-    background: rgba(255,255,255,0.06);
-  }
-
-  .profile-initial {
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    background: var(--color-accent-tint);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  .wordmark {
     font-family: var(--font-display);
     font-size: 11px;
     font-weight: 700;
     color: var(--color-accent);
+    letter-spacing: 0.2em;
+    line-height: 1;
+    flex-shrink: 0;
   }
 
-  .profile-name {
-    font-size: 11.5px;
-    font-weight: 600;
-    color: var(--color-text-2);
+  .header-sep {
+    width: 1px;
+    height: 16px;
+    background: var(--color-edge);
+    flex-shrink: 0;
+  }
+
+  .ci-pill {
+    background: var(--color-ci-tint);
+    border: 1px solid var(--color-ci-ring);
+    border-radius: var(--radius-pill);
+    padding: 3px 12px;
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-ci);
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background 150ms;
+  }
+  .ci-pill:hover { background: var(--color-ci-dim); }
+  .ci-pill:active { transform: scale(0.96); }
+
+  .profile-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--color-accent-tint);
+    border: 1px solid var(--color-accent-ring);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 150ms;
+    flex-shrink: 0;
+  }
+  .profile-btn:hover { background: var(--color-accent-dim); }
+
+  .profile-initial {
+    font-family: var(--font-display);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--color-accent);
+    line-height: 1;
   }
 </style>
