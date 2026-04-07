@@ -76,6 +76,7 @@
   // ── UI state ──────────────────────────────────────────────────────────
   let showMethodSheet  = $state(false);
   let showSessionSheet = $state(false);
+  let sessionSaved     = $state(false);
   let showGoalEditor   = $state(false);
   let showEditTime     = $state(false);
   let selectedMethod   = $state(null);
@@ -104,7 +105,7 @@
     selectedMethod = null;
   }
 
-  function handleStop() {
+function handleStop() {
     const session = stopTimer();
     if (!session) return;
     const dur = Math.max(1, Math.round((Date.now() - session.startTs) / 60000));
@@ -115,7 +116,7 @@
       category: 'active', tension: 'med', notes: '', isRest: false,
     });
     bumpStreak(dur);
-    showSessionSheet = false;
+    sessionSaved = true;
   }
 
   function applyEditTime() {
@@ -187,10 +188,10 @@
     $activeSession ? fmtLive($timerSecs) :
     $todayMin > 0  ? fmtMin($todayMin)   : ''
   );
-  let ringSubText = $derived(
+let ringSubText = $derived(
     $activeSession ? ($activeSession.methodLabel ?? $activeSession.method) :
     isGoalMet      ? '🎯 Goal Reached'  :
-    $todayMin > 0  ? `${$goalPct}% of goal` : 'tap to begin'
+    $todayMin > 0  ? `${$goalPct}% of goal` : ''
   );
   let showCTA = $derived(!$activeSession && $todayMin === 0);
 </script>
@@ -263,8 +264,8 @@
 
       <!-- Center: CTA (idle + no progress) -->
       {#if showCTA}
-        <text x={CX} y={CY - 8}  text-anchor="middle" class="rc-cta-top">tap to</text>
-        <text x={CX} y={CY + 22} text-anchor="middle" class="rc-cta-main">Start</text>
+        <text x={CX} y={CY + 10} text-anchor="middle" class="rc-cta-main">Start</text>
+        <text x={CX} y={CY + 34} text-anchor="middle" class="rc-cta-top">restoring</text>
 
       <!-- Center: active timer -->
       {:else if $activeSession}
@@ -450,8 +451,22 @@
         {/if}
       </div>
 
-      <button class="btn-primary btn-stop" onclick={handleStop}>⏹ Stop &amp; Save</button>
-      <button class="btn-ghost" style="margin-top:8px" onclick={() => showSessionSheet = false}>Keep Running</button>
+      {#if !sessionSaved}
+        <button class="btn-ghost" style="margin-top:8px; margin-bottom:8px" onclick={() => showSessionSheet = false}>
+          Keep Running
+        </button>
+        <button class="btn-primary btn-stop" onclick={handleStop}>⏹ Stop &amp; Save</button>
+      {:else}
+        <div class="save-confirm-wrap">
+          <span class="save-check">✓</span>
+          <p class="save-confirm-text">Session Saved!</p>
+        </div>
+        <button class="btn-primary" style="margin-top:20px"
+          onclick={() => { showSessionSheet = false; sessionSaved = false; }}
+        >
+          Back to Home
+        </button>
+      {/if}
     </div>
   </div>
 {/if}
@@ -695,4 +710,32 @@
   background: none; border: none; cursor: pointer; z-index: 0;
 }
 .sheet { position: relative; z-index: 1; }
+/* Arc idle state */
+  .arc-start {
+    font-size: 40px;
+    font-family: var(--font-display);
+    font-weight: 900;
+    fill: var(--color-accent);
+  }
+  .arc-cta {
+    font-size: 13px;
+    fill: var(--color-text-3);
+    font-family: var(--font-sans);
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .save-confirm-wrap {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 8px; padding: 16px 0 8px;
+  }
+  .save-check {
+    font-size: 48px; color: var(--color-positive);
+    line-height: 1;
+  }
+  .save-confirm-text {
+    font-size: 18px; font-weight: 700;
+    color: var(--color-text-1);
+    font-family: var(--font-display);
+  }
 </style>

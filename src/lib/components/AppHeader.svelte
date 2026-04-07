@@ -60,20 +60,20 @@
   }
 
   .ci-pill {
-    background: var(--color-ci-tint);
-    border: 1px solid var(--color-ci-ring);
+    background: var(--color-accent-tint);
+    border: 1px solid var(--color-accent-ring);
     border-radius: var(--radius-pill);
     padding: 3px 12px;
     font-family: var(--font-display);
     font-size: 11px;
     font-weight: 700;
-    color: var(--color-ci);
+    color: var(--color-accent);
     cursor: pointer;
     white-space: nowrap;
     flex-shrink: 0;
     transition: background 150ms;
   }
-  .ci-pill:hover { background: var(--color-ci-dim); }
+  .ci-pill:hover { background: var(--color-accent-dim); }
   .ci-pill:active { transform: scale(0.96); }
 
   .profile-btn {
