@@ -13,25 +13,24 @@
   let { badges = {} } = $props();
 </script>
 
-<nav class="app-nav">
+<nav class="pill-nav" aria-label="Main navigation">
   {#each TABS as tab}
     {@const isActive = $currentTab === tab.id}
     {@const hasBadge = !!badges[tab.id]}
     <button
-      class="nav-btn"
+      class="nav-item"
       class:active={isActive}
       onclick={() => navigateTo(tab.id)}
       aria-label={tab.label}
       aria-current={isActive ? 'page' : undefined}
     >
-      <span class="nav-dot" aria-hidden="true"></span>
-      <span class="nav-icon-wrap">
+      <span class="icon-wrap">
         <svg
-          width="21" height="21"
+          width="20" height="20"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
-          stroke-width={isActive ? '1.75' : '1.5'}
+          stroke-width={isActive ? '2' : '1.5'}
           stroke-linecap="round"
           stroke-linejoin="round"
           aria-hidden="true"
@@ -39,79 +38,103 @@
           {@html ICONS[tab.id]}
         </svg>
         {#if hasBadge}
-          <span class="nav-badge" aria-hidden="true"></span>
+          <span class="badge-dot" aria-hidden="true"></span>
         {/if}
       </span>
+      {#if isActive}
+        <span class="active-label">{tab.label}</span>
+      {/if}
     </button>
   {/each}
 </nav>
 
 <style>
-  .app-nav {
+  .pill-nav {
     position: fixed;
-    bottom: 0; left: 0; right: 0;
-    max-width: 480px;
-    margin: 0 auto;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 50;
+
     display: flex;
-    background: var(--color-surface-1);
-    border-top: 1px solid var(--color-edge);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-    z-index: 30;
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    align-items: center;
+    gap: 2px;
+    padding: 8px 10px;
+
+    background: oklch(14% 0.04 278 / 0.85);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid var(--color-accent-ring);
+    border-radius: var(--radius-pill);
+    box-shadow: var(--shadow-pill-nav);
+
+    /* Never wider than the viewport, but shrinks if needed */
+    max-width: calc(100vw - 32px);
   }
 
-  .nav-btn {
-    flex: 1;
+  .nav-item {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    justify-content: center;
-    gap: 4px;
-    padding: 10px 2px 8px;
+    gap: 6px;
+    padding: 8px 12px;
     background: none;
     border: none;
+    border-radius: var(--radius-pill);
+    color: var(--color-text-3);
     cursor: pointer;
-    color: var(--color-text-4);
-    transition: color 180ms;
-    min-height: 58px;
+    transition:
+      color 200ms,
+      background 200ms,
+      padding 300ms var(--ease-out-expo);
     position: relative;
+    white-space: nowrap;
+    min-width: 40px;
+    justify-content: center;
   }
 
-  .nav-btn.active { color: var(--color-accent); }
+  .nav-item.active {
+    color: var(--color-accent);
+    background: var(--color-accent-tint);
+    /* Expand to show label — handled by the label render */
+  }
 
-  .nav-dot {
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: transparent;
-    transition: background 180ms;
+  .icon-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
   }
 
-  .nav-btn.active .nav-dot {
-    background: var(--color-accent);
+  .active-label {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--color-accent);
+    animation: label-in 220ms var(--ease-out-expo) both;
   }
 
-  .nav-icon-wrap {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
+  @keyframes label-in {
+    from { opacity: 0; transform: translateX(-4px); max-width: 0; }
+    to   { opacity: 1; transform: translateX(0);    max-width: 80px; }
   }
 
-  .nav-badge {
+  .badge-dot {
     position: absolute;
-    top: -2px; right: -4px;
-    width: 7px; height: 7px;
+    top: -2px;
+    right: -4px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: var(--color-critical);
-    border: 1.5px solid var(--color-surface-1);
+    border: 1.5px solid oklch(14% 0.04 278);
   }
 
   @media (hover: hover) {
-    .nav-btn:not(.active):hover { color: var(--color-text-2); }
+    .nav-item:not(.active):hover {
+      color: var(--color-text-1);
+      background: oklch(100% 0 0 / 0.04);
+    }
   }
 </style>

@@ -1,8 +1,8 @@
 <script>
+  import { profileSheetOpen } from '$lib/stores/ui.js';
+
   let {
     ciLabel = 'CI-0',
-    profileName = 'Restorer',
-    onProfileClick,
     onCIClick,
   } = $props();
 </script>
@@ -16,8 +16,8 @@
     </button>
   </div>
 
-  <button class="profile-btn" onclick={onProfileClick} aria-label="Profile">
-    <span class="profile-initial">{profileName.charAt(0).toUpperCase()}</span>
+  <button class="profile-btn" onclick={() => profileSheetOpen.set(true)} aria-label="Open profile">
+    <span class="profile-initial">R</span>
   </button>
 </header>
 

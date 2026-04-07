@@ -17,7 +17,7 @@
   <TodayView />
 {:else if stub}
   <div class="stub-view">
-    <div class="surface-gold stub-hero animate-slide-up">
+    <div class="surface-glass stub-hero animate-slide-up">
       <span style="font-size:42px">{stub.icon}</span>
       <h1 class="stub-title gradient-text-ember">{stub.title}</h1>
       <div class="pill pill-accent" style="margin-top:4px">Coming in Phase 3</div>

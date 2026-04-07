@@ -1,7 +1,8 @@
 <script>
   import '../app.css';
   import AppHeader from '$lib/components/AppHeader.svelte';
-  import AppNav from '$lib/components/AppNav.svelte';
+  import AppNav          from '$lib/components/AppNav.svelte';
+  import ProfileSheet    from '$lib/components/ProfileSheet.svelte';
   import { currentTab, previousTab, TABS, navigateTo } from '$lib/stores/navigation.js';
   import { fly } from 'svelte/transition';
   import { cubicOut, cubicIn } from 'svelte/easing';
@@ -15,16 +16,13 @@
   let direction    = $derived(tabIndex >= prevTabIndex ? 1 : -1);
 
   // Placeholder values for now
-  const ciLabel    = 'CI-0';
-  const profileName = 'Restorer';
+  const ciLabel = 'CI-0';
 </script>
 
 <div class="app-shell">
   <AppHeader
     {ciLabel}
-    {profileName}
     onCIClick={() => navigateTo('journey')}
-    onProfileClick={() => console.log('profile')}
   />
 
   <main class="app-content">
@@ -49,6 +47,7 @@
   </main>
 
   <AppNav />
+  <ProfileSheet />
 </div>
 
 <style>
@@ -67,7 +66,7 @@
     overflow: hidden;
     position: relative;
     /* Bottom padding accounts for nav height + safe area */
-    padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
   }
 
   .tab-view {
