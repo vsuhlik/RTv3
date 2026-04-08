@@ -111,7 +111,6 @@
 
   let wkGoal  = $derived(($char.dailyGoalMin || 480) * 7);
   let maxWk   = $derived(Math.max(...wkBars.map(w => w.mins), wkGoal, 1));
-  let gy      = $derived(98 - (wkGoal / maxWk) * 80);
 
   // ── Activity heatmap — 84 days ─────────────────────────────────────────
   let hCells = $derived((() => {
@@ -233,6 +232,7 @@
           stroke="var(--color-edge)" stroke-width="0.5" opacity="0.7"/>
       {/each}
       <!-- Weekly goal pace line -->
+      {@const gy = 98 - (wkGoal / maxWk) * 80}
       <line x1="2" y1={gy} x2="282" y2={gy}
         stroke="var(--color-ci)" stroke-width="1" stroke-dasharray="4 3" opacity="0.65"/>
       <text x="280" y={gy - 3} class="svgt goal-t" text-anchor="end">goal</text>

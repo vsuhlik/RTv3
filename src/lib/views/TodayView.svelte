@@ -710,21 +710,6 @@ let ringSubText = $derived(
   background: none; border: none; cursor: pointer; z-index: 0;
 }
 .sheet { position: relative; z-index: 1; }
-/* Arc idle state */
-  .arc-start {
-    font-size: 40px;
-    font-family: var(--font-display);
-    font-weight: 900;
-    fill: var(--color-accent);
-  }
-  .arc-cta {
-    font-size: 13px;
-    fill: var(--color-text-3);
-    font-family: var(--font-sans);
-    font-weight: 500;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
   .save-confirm-wrap {
     display: flex; flex-direction: column; align-items: center;
     gap: 8px; padding: 16px 0 8px;
