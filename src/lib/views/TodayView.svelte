@@ -1,7 +1,12 @@
+<script module>
+  // Lives outside the component lifecycle — survives tab switches
+  let _celebShownDate = '';
+</script>
+
 <script>
   import { char }        from '$lib/stores/profile.js';
   import { logs }        from '$lib/stores/logs.js';
-  import { activeSession, timerSecs, startTimer, stopTimer } from '$lib/stores/timer.js';
+  import { activeSession, timerSecs, startTimer, stopTimer, updateSessionStart } from '$lib/stores/timer.js';
   import { todayLogs, todayMin, goalPct, isRestDay, todayStr } from '$lib/stores/derived.js';
 
   // ── Ring geometry ─────────────────────────────────────────────────────
@@ -10,16 +15,14 @@
   let dashOffset = $derived(+(CIRC * (1 - Math.min($goalPct / 100, 1))).toFixed(4));
   let isGoalMet  = $derived($goalPct >= 100);
 
-  // ── Celebration (fires once when crossing 100%) ───────────────────────
-  let prevPct          = $state(0);
-  let showCelebration  = $state(false);
+  // ── Celebration (fires once per calendar day) ─────────────────────────
+  let showCelebration = $state(false);
   $effect(() => {
-    const cur = $goalPct;
-    if (cur >= 100 && prevPct < 100) {
+    if ($goalPct >= 100 && _celebShownDate !== todayStr()) {
+      _celebShownDate = todayStr();
       showCelebration = true;
       setTimeout(() => { showCelebration = false; }, 3000);
     }
-    prevPct = cur;
   });
 
   // ── Helpers ───────────────────────────────────────────────────────────
@@ -77,6 +80,7 @@
   let showMethodSheet  = $state(false);
   let showSessionSheet = $state(false);
   let sessionSaved     = $state(false);
+  let showSavedToast   = $state(false);
   let showGoalEditor   = $state(false);
   let showEditTime     = $state(false);
   let selectedMethod   = $state(null);
@@ -84,6 +88,7 @@
   let addingToGroup    = $state(null);
   let newMethodName    = $state('');
   let editTimeValue    = $state('');
+  let editDateValue    = $state('');
   let editGoalValue    = $state('');
 
   // ── Ring tap ──────────────────────────────────────────────────────────
@@ -91,6 +96,7 @@
     if ($activeSession) {
       const d = new Date($activeSession.startTs);
       editTimeValue = `${p(d.getHours())}:${p(d.getMinutes())}`;
+      editDateValue = d.toISOString().slice(0, 10);
       showSessionSheet = true;
     } else if (!$isRestDay) {
       showMethodSheet = true;
@@ -106,27 +112,44 @@
   }
 
 function handleStop() {
+    showSessionSheet = false;
     const session = stopTimer();
     if (!session) return;
-    const dur = Math.max(1, Math.round((Date.now() - session.startTs) / 60000));
-    logs.add({
-      id: crypto.randomUUID(), date: todayStr(),
-      startTs: session.startTs, endTs: Date.now(), dur,
-      method: session.method, methodLabel: session.methodLabel ?? session.method,
-      category: 'active', tension: 'med', notes: '', isRest: false,
-    });
+    const rawMs = Date.now() - (session.startTs ?? Date.now());
+    const dur   = isFinite(rawMs) && rawMs > 0
+      ? Math.max(1, Math.round(rawMs / 60000))
+      : 1;
+    console.log('[handleStop] dur (mins):', dur, '| startTs:', session.startTs);
+    const entry = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      date: todayStr(),
+      startTs: session.startTs,
+      endTs: Date.now(),
+      dur,
+      method: session.method || 'unknown',
+      methodLabel: session.methodLabel ?? session.method ?? 'Unknown',
+      category: 'active',
+      tension: 'med',
+      notes: '',
+      isRest: false,
+    };
+    console.log('[handleStop] adding entry:', entry);
+    logs.add(entry);
+    console.log('[handleStop] logs after add:', logs.get());
     bumpStreak(dur);
-    sessionSaved = true;
+    showSessionSheet = false;
+    showSavedToast = true;
+    setTimeout(() => { showSavedToast = false; }, 2800);
   }
 
-  function applyEditTime() {
+function applyEditTime() {
     if (!editTimeValue || !$activeSession) return;
     const [hh, mm] = editTimeValue.split(':').map(Number);
-    const now = new Date();
-    const newTs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0).getTime();
-    if (newTs > Date.now()) return;
-    activeSession.update(s => ({ ...s, startTs: newTs }));
-    timerSecs.set(Math.floor((Date.now() - newTs) / 1000));
+    const dateStr  = editDateValue || new Date().toISOString().slice(0, 10);
+    const [yr, mo, dy] = dateStr.split('-').map(Number);
+    const newTs = new Date(yr, mo - 1, dy, hh, mm, 0).getTime();
+    if (isNaN(newTs) || newTs > Date.now()) return;
+    updateSessionStart(newTs);
     showEditTime = false;
   }
 
@@ -149,15 +172,23 @@ function handleStop() {
     });
   }
 
+  // ── Rest day ─────────────────────────────────────────────────────────
+  let showRestToast = $state(false);
+  let restToastMsg  = $state('');
+
   function markRestDay() {
-    if ($isRestDay) return;
-    const today = todayStr();
-    logs.add({ id: crypto.randomUUID(), date: today, isRest: true, dur: 0 });
-    // Maintain streak — rest day counts as "present"
-    char.update(c => {
-      if (c.lastSessionDate === today) return c;
-      return { ...c, lastSessionDate: today };
-    });
+    if ($isRestDay) {
+      // Toggle OFF — remove today's rest entry
+      logs.setAll($logs.filter(l => !(l.date === todayStr() && l.isRest)));
+      restToastMsg = '✗ Rest day removed';
+    } else {
+      const today = todayStr();
+      logs.add({ id: crypto.randomUUID(), date: today, isRest: true, dur: 0 });
+      char.update(c => c.lastSessionDate === today ? c : { ...c, lastSessionDate: today });
+      restToastMsg = '🛌 Rest day on — streak protected';
+    }
+    showRestToast = true;
+    setTimeout(() => { showRestToast = false; }, 2500);
   }
 
   // ── Goal editor ───────────────────────────────────────────────────────
@@ -183,6 +214,54 @@ function handleStop() {
     newMethodName = ''; addingToGroup = null;
   }
 
+// ── Session accordion ─────────────────────────────────────────────────
+  let expandedSessionId    = $state(/** @type {string|null} */(null));
+  let showEditSessionSheet = $state(false);
+  let editingSession       = $state(/** @type {any} */(null));
+  let editSessionDur       = $state('');
+  let editSessionMethod    = $state(/** @type {any} */(null));
+  let allMethods           = $derived(groups.flatMap(g => g.methods));
+
+  // Auto-expand first session when list changes
+  $effect(() => {
+    if ($todayLogs.length > 0 && !$todayLogs.find(l => l.id === expandedSessionId)) {
+      expandedSessionId = $todayLogs[0].id;
+    }
+    if ($todayLogs.length === 0) expandedSessionId = null;
+  });
+
+  function deleteSession(id) {
+    const entry = $todayLogs.find(l => l.id === id);
+    if (!entry) return;
+    logs.remove(id);
+    char.update(c => ({
+      ...c,
+      totalMinutes: Math.max(0, (c.totalMinutes || 0) - (entry.dur || 0)),
+      totalSessions: Math.max(0, (c.totalSessions || 0) - 1),
+    }));
+  }
+
+  function openEditSession(entry) {
+    editingSession    = entry;
+    editSessionDur    = String(entry.dur || 1);
+    editSessionMethod = { id: entry.method, label: entry.methodLabel ?? entry.method };
+    showEditSessionSheet = true;
+  }
+
+  function saveEditSession() {
+    if (!editingSession) return;
+    const dur  = Math.max(1, parseInt(editSessionDur) || 1);
+    const diff = dur - (editingSession.dur || 0);
+    logs.setAll($logs.map(l =>
+      l.id === editingSession.id
+        ? { ...l, dur, method: editSessionMethod?.id ?? l.method, methodLabel: editSessionMethod?.label ?? l.methodLabel }
+        : l
+    ));
+    char.update(c => ({ ...c, totalMinutes: (c.totalMinutes || 0) + diff }));
+    showEditSessionSheet = false;
+    editingSession = null;
+  }
+
   // ── Ring center display ───────────────────────────────────────────────
   let ringMainText = $derived(
     $activeSession ? fmtLive($timerSecs) :
@@ -203,6 +282,19 @@ let ringSubText = $derived(
     <div class="cel-ring r2"></div>
     <div class="cel-ring r3"></div>
     <span class="cel-emoji">🎯</span>
+  </div>
+{/if}
+
+{#if showSavedToast}
+  <div class="saved-toast animate-slide-up" aria-live="polite">
+    <span class="saved-toast-check">✓</span>
+    Session saved!
+  </div>
+{/if}
+
+{#if showRestToast}
+  <div class="saved-toast rest-toast animate-slide-up" aria-live="polite">
+    {restToastMsg}
   </div>
 {/if}
 
@@ -307,26 +399,59 @@ let ringSubText = $derived(
   </div>
 </div>
 
-<!-- ── Rest day ───────────────────────────────────────────────────────── -->
-{#if $isRestDay}
-  <div class="rest-notice">🛌 Rest day — streak protected</div>
-{:else if !$activeSession}
+<!-- ── Rest day toggle ─────────────────────────────────────────────────── -->
+{#if !$activeSession}
   <div class="lower-actions">
-    <button class="btn-rest-day" onclick={markRestDay}>🛌 Log Rest Day</button>
+    <button
+      class="btn-rest-day"
+      class:rest-day-active={$isRestDay}
+      onclick={markRestDay}
+    >
+      {$isRestDay ? '🛌 Rest Day On — Streak Protected' : '🛌 Log Rest Day'}
+    </button>
   </div>
 {/if}
 
 <!-- ── Today's sessions ───────────────────────────────────────────────── -->
 {#if $todayLogs.length > 0}
   <div class="today-log">
-    <p class="section-label">Today's Sessions</p>
+    <p class="section-label">Today's Sessions ({$todayLogs.length})</p>
     {#each $todayLogs as entry (entry.id)}
-      <div class="log-row animate-slide-up">
-        <div class="log-left">
-          <span class="log-dot"></span>
-          <span class="log-method">{entry.methodLabel ?? entry.method}</span>
-        </div>
-        <span class="log-dur">{fmtMin(entry.dur)}</span>
+      <div class="log-item animate-slide-up">
+        <button
+          class="log-row"
+          onclick={() => expandedSessionId = expandedSessionId === entry.id ? null : entry.id}
+        >
+          <div class="log-left">
+            <span class="log-dot"></span>
+            <span class="log-method">{entry.methodLabel ?? entry.method}</span>
+          </div>
+          <div class="log-right">
+            <span class="log-dur">{fmtMin(entry.dur)}</span>
+            <svg
+              class="log-chevron"
+              style="transform:rotate({expandedSessionId === entry.id ? 180 : 0}deg);transition:transform 220ms"
+              width="14" height="14" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            ><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+        </button>
+        {#if expandedSessionId === entry.id}
+          <div class="log-detail animate-fade-in">
+            {#if entry.startTs}
+              <span class="log-time">
+                {new Date(entry.startTs).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}
+                {#if entry.endTs} → {new Date(entry.endTs).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}{/if}
+              </span>
+            {:else}
+              <span class="log-time">Manual entry</span>
+            {/if}
+            <div class="log-actions">
+              <button class="log-action-btn log-edit" onclick={() => openEditSession(entry)}>✏ Edit</button>
+              <button class="log-action-btn log-delete" onclick={() => deleteSession(entry.id)}>🗑 Delete</button>
+            </div>
+          </div>
+        {/if}
       </div>
     {/each}
   </div>
@@ -338,7 +463,7 @@ let ringSubText = $derived(
 {#if showMethodSheet}
   <div class="sheet-backdrop" role="dialog" aria-modal="true" aria-label="Method picker">
     <button class="backdrop-dismiss" onclick={() => showMethodSheet = false} aria-label="Close"></button>
-    <div class="sheet animate-slide-up">
+    <div class="sheet animate-slide-up" style="padding-bottom: 120px;">
       <div class="sheet-handle"></div>
       <h2 class="sheet-title">Choose Method</h2>
 
@@ -436,10 +561,18 @@ let ringSubText = $derived(
       <div class="time-edit-block">
         <p class="time-edit-hint">Forgot to start on time? Adjust it below.</p>
         {#if showEditTime}
-          <div class="time-edit-row">
-            <input type="time" class="input-field" bind:value={editTimeValue} />
-            <button class="btn-apply" onclick={applyEditTime}>Apply</button>
-            <button class="btn-x" onclick={() => showEditTime = false}>✕</button>
+          <div class="time-edit-col">
+            <div class="time-edit-row">
+              <input type="date" class="input-field time-date-input"
+                bind:value={editDateValue}
+                max={new Date().toISOString().slice(0,10)}
+              />
+            </div>
+            <div class="time-edit-row">
+              <input type="time" class="input-field" bind:value={editTimeValue} />
+              <button class="btn-apply" onclick={applyEditTime}>Apply</button>
+              <button class="btn-x" onclick={() => showEditTime = false}>✕</button>
+            </div>
           </div>
         {:else}
           <button class="btn-ghost w-full" onclick={() => showEditTime = true}>
@@ -451,22 +584,10 @@ let ringSubText = $derived(
         {/if}
       </div>
 
-      {#if !sessionSaved}
-        <button class="btn-ghost" style="margin-top:8px; margin-bottom:8px" onclick={() => showSessionSheet = false}>
-          Keep Running
-        </button>
-        <button class="btn-primary btn-stop" onclick={handleStop}>⏹ Stop &amp; Save</button>
-      {:else}
-        <div class="save-confirm-wrap">
-          <span class="save-check">✓</span>
-          <p class="save-confirm-text">Session Saved!</p>
-        </div>
-        <button class="btn-primary" style="margin-top:20px"
-          onclick={() => { showSessionSheet = false; sessionSaved = false; }}
-        >
-          Back to Home
-        </button>
-      {/if}
+      <button class="btn-primary btn-stop" onclick={handleStop}>⏹ Stop Session</button>
+      <button class="btn-ghost" style="margin-top:8px" onclick={() => showSessionSheet = false}>
+        Keep Running
+      </button>
     </div>
   </div>
 {/if}
@@ -499,6 +620,39 @@ let ringSubText = $derived(
 
       <button class="btn-primary" style="margin-top:24px" onclick={saveGoal}>Save Goal</button>
       <button class="btn-ghost"   style="margin-top:8px"  onclick={() => showGoalEditor = false}>Cancel</button>
+    </div>
+  </div>
+{/if}
+
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- SHEET — Edit Session ─────────────────────────────────────────────── -->
+{#if showEditSessionSheet && editingSession}
+  <div class="sheet-backdrop" role="dialog" aria-modal="true" aria-label="Edit session">
+    <button class="backdrop-dismiss" onclick={() => showEditSessionSheet = false} aria-label="Close"></button>
+    <div class="sheet animate-slide-up">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">Edit Session</h2>
+
+      <p class="section-label" style="margin-bottom:6px">Duration (minutes)</p>
+      <div class="goal-input-wrap" style="margin-bottom:20px">
+        <input type="number" class="input-field goal-num-input"
+          bind:value={editSessionDur} min="1" placeholder="1"
+        />
+        <span class="goal-unit">min</span>
+      </div>
+
+      <p class="section-label" style="margin-bottom:8px">Method</p>
+      <div class="mpills" style="margin-bottom:20px">
+        {#each allMethods as m}
+          <button class="mpill" class:mpill-selected={editSessionMethod?.id === m.id}
+            onclick={() => editSessionMethod = m}
+          >{m.label}</button>
+        {/each}
+      </div>
+
+      <button class="btn-primary" onclick={saveEditSession}>Save Changes</button>
+      <button class="btn-ghost" style="margin-top:8px" onclick={() => showEditSessionSheet = false}>Cancel</button>
     </div>
   </div>
 {/if}
@@ -596,6 +750,13 @@ let ringSubText = $derived(
   transition: all 150ms;
 }
 .btn-rest-day:hover { border-color: var(--color-accent-ring); color: var(--color-text-2); background: var(--color-accent-tint); }
+.rest-day-active {
+  background: oklch(75% 0.19 55 / 0.14) !important;
+  border-color: oklch(75% 0.19 55 / 0.55) !important;
+  color: var(--color-ci) !important;
+  box-shadow: 0 0 14px oklch(75% 0.19 55 / 0.25);
+}
+.rest-toast { top: 112px !important; }
 .rest-notice {
   display: flex; align-items: center; gap: 8px;
   padding: 12px 16px; background: var(--color-surface-2);
@@ -605,16 +766,36 @@ let ringSubText = $derived(
 
 /* ── Today log ────────────────────────────────────────────────────────── */
 .today-log { margin-top: 20px; }
+.log-item {
+  background: var(--color-surface-1); border: 1px solid var(--color-edge);
+  border-radius: var(--radius-md); margin-bottom: 6px; overflow: hidden;
+}
 .log-row {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 11px 14px; margin-bottom: 6px;
-  background: var(--color-surface-1); border: 1px solid var(--color-edge);
-  border-radius: var(--radius-md);
+  padding: 11px 14px; background: none; border: none; cursor: pointer;
+  width: 100%; -webkit-tap-highlight-color: transparent;
 }
-.log-left { display: flex; align-items: center; gap: 10px; }
+.log-left  { display: flex; align-items: center; gap: 10px; }
+.log-right { display: flex; align-items: center; gap: 8px; }
 .log-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-accent); box-shadow: 0 0 6px var(--color-accent-glow); flex-shrink: 0; }
 .log-method { font-size: 13px; font-weight: 600; color: var(--color-text-1); }
 .log-dur { font-size: 13px; font-weight: 700; color: var(--color-accent); font-variant-numeric: tabular-nums; }
+.log-chevron { color: var(--color-text-4); flex-shrink: 0; }
+.log-detail {
+  padding: 10px 14px 12px; display: flex; align-items: center;
+  justify-content: space-between; gap: 8px;
+  border-top: 1px solid var(--color-edge);
+}
+.log-time { font-size: 11px; color: var(--color-text-3); font-variant-numeric: tabular-nums; }
+.log-actions { display: flex; gap: 6px; }
+.log-action-btn {
+  padding: 5px 12px; border-radius: var(--radius-pill);
+  font-size: 11px; font-weight: 700; cursor: pointer; border: 1px solid;
+  transition: opacity 150ms;
+}
+.log-action-btn:active { opacity: 0.7; }
+.log-edit   { background: var(--color-accent-tint); border-color: var(--color-accent-ring); color: var(--color-accent); }
+.log-delete { background: var(--color-critical-bg); border-color: var(--color-critical-bg); color: var(--color-critical); }
 
 /* ── Shared sheet backdrop ────────────────────────────────────────────── */
 .sheet-backdrop {
@@ -667,6 +848,8 @@ let ringSubText = $derived(
 .time-edit-block { margin-bottom: 16px; }
 .time-edit-hint { font-size: 11px; color: var(--color-text-3); margin-bottom: 8px; }
 .time-edit-row { display: flex; gap: 6px; align-items: center; }
+.time-edit-col { display: flex; flex-direction: column; gap: 6px; }
+  .time-date-input { font-size: 13px; }
 .btn-apply { padding: 10px 16px; background: var(--color-accent); border: none; border-radius: var(--radius-md); color: var(--color-base); font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .btn-x { padding: 10px 12px; background: var(--color-surface-2); border: 1px solid var(--color-edge); border-radius: var(--radius-md); color: var(--color-text-3); font-size: 12px; cursor: pointer; }
 .w-full { width: 100%; }
@@ -723,4 +906,19 @@ let ringSubText = $derived(
     color: var(--color-text-1);
     font-family: var(--font-display);
   }
+
+  /* ── Saved toast ──────────────────────────────────────────────────────── */
+  .saved-toast {
+    position: fixed; top: 72px; left: 50%; transform: translateX(-50%);
+    z-index: 60; display: flex; align-items: center; gap: 8px;
+    padding: 10px 20px;
+    background: var(--color-positive-bg);
+    border: 1px solid var(--color-positive-ring);
+    border-radius: var(--radius-pill);
+    font-size: 13px; font-weight: 700; color: var(--color-positive);
+    white-space: nowrap;
+    box-shadow: 0 4px 20px oklch(0% 0 0 / 0.4);
+    pointer-events: none;
+  }
+  .saved-toast-check { font-size: 16px; }
 </style>
