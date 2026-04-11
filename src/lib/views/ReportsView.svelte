@@ -3,8 +3,10 @@
   import { char } from '$lib/stores/profile.js';
 
   // ── Time range filter ──────────────────────────────────────────────────
-  let range = $state('30D');
-  const RANGES = ['7D', '30D', '90D', 'All'];
+  let range      = $state('30D');
+  let customFrom = $state('');
+  let customTo   = $state('');
+  const RANGES = ['7D', '30D', '90D', 'All', 'Custom'];
 
   // ── Method group → color (consistent across every chart) ──────────────
   const GROUPS = [
@@ -32,25 +34,34 @@
   }
 
   // ── Filtered non-rest logs ─────────────────────────────────────────────
-  let fLogs = $derived($logs.filter(l => {
-    if (l.isRest) return false;
-    if (range === 'All') return true;
-    return l.date >= dNAgo(range === '7D' ? 6 : range === '30D' ? 29 : 89);
-  }));
+  let fLogs = $derived((() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return $logs.filter(l => {
+      if (l.isRest) return false;
+      if (range === 'All') return true;
+      if (range === 'Custom') {
+        const from = customFrom || '2000-01-01';
+        const to   = customTo   || today;
+        return l.date >= from && l.date <= to;
+      }
+      const days = range === '7D' ? 6 : range === '30D' ? 29 : 89;
+      return l.date >= dNAgo(days) && l.date <= today;
+    });
+  })());
 
   // ── Summary metrics ────────────────────────────────────────────────────
   let totMins = $derived(fLogs.reduce((s,l) => s + (l.dur||0), 0));
   let totSess = $derived(fLogs.length);
   let actDays = $derived(new Set(fLogs.map(l => l.date)).size);
-  let rDays   = $derived(
-    range === 'All'
-      ? (fLogs.length
-          ? Math.max(1, Math.ceil(
-              (Date.now() - new Date([...fLogs].sort((a,b)=>a.date>b.date?1:-1)[0].date).getTime())
-              / 86400000) + 1)
-          : 1)
-      : (range === '7D' ? 7 : range === '30D' ? 30 : 90)
-  );
+  let rDays = $derived((() => {
+    if (range === 'All' || range === 'Custom') {
+      if (!fLogs.length) return 1;
+      const sorted = [...fLogs].sort((a, b) => a.date > b.date ? 1 : -1);
+      const first  = new Date(sorted[0].date + 'T12:00:00').getTime();
+      return Math.max(1, Math.ceil((Date.now() - first) / 86400000) + 1);
+    }
+    return range === '7D' ? 7 : range === '30D' ? 30 : 90;
+  })());
   let consPct = $derived(Math.min(100, Math.round((actDays / rDays) * 100)));
   let avgDay  = $derived(actDays > 0 ? Math.round(totMins / actDays) : 0);
   let hasData = $derived(totMins > 0);
@@ -340,11 +351,31 @@
 <div class="rv">
 
   <!-- ── Range selector ───────────────────────────────────────────── -->
-<div class="range-row">
+  <div class="range-row">
     {#each RANGES as r}
       <button class="rpill" class:active={range === r} onclick={() => range = r}>{r}</button>
     {/each}
   </div>
+  {#if range === 'Custom'}
+    <div class="custom-range-row animate-fade-in">
+      <div class="cr-group">
+        <span class="cr-label">FROM</span>
+        <input type="date" class="input-field cr-input"
+          bind:value={customFrom}
+          max={customTo || new Date().toISOString().slice(0,10)}
+        />
+      </div>
+      <span class="cr-sep">→</span>
+      <div class="cr-group">
+        <span class="cr-label">TO</span>
+        <input type="date" class="input-field cr-input"
+          bind:value={customTo}
+          min={customFrom}
+          max={new Date().toISOString().slice(0,10)}
+        />
+      </div>
+    </div>
+  {/if}
 
   <!-- ── Weekly Recap card ──────────────────────────────────────────── -->
   <div class="surface-card wkr-card">
@@ -373,6 +404,129 @@
       </div>
     </div>
   </div>
+
+  <!-- ── Activity Calendar ─────────────────────────────────────────── -->
+  <div class="surface-card cc">
+    <!-- Month/year nav -->
+    <div class="cal-header">
+      <button class="cal-nav-btn" onclick={calPrev}>‹</button>
+      <span class="cal-month-label">{calMonthLabel}</span>
+      <button class="cal-nav-btn" onclick={calNext} disabled={calIsAtCurrent}>›</button>
+    </div>
+    <!-- Day-of-week headers -->
+    <div class="cal-dow-row">
+      {#each CAL_DOW as d}<div class="cal-dow">{d}</div>{/each}
+    </div>
+    <!-- Day grid -->
+    <div class="cal-grid">
+      {#each calDays as cell}
+        {#if cell === null}
+          <div class="cal-cell cal-pad"></div>
+        {:else}
+          <button
+            class="cal-cell"
+            class:cal-gold={cell.status === 'gold'}
+            class:cal-active={cell.status === 'active'}
+            class:cal-rest={cell.status === 'rest'}
+            class:cal-today={cell.isToday}
+            class:cal-future={cell.isFut}
+            onclick={() => openCalDay(cell)}
+            disabled={cell.isFut}
+          >
+            <span class="cal-num">{cell.d}</span>
+          </button>
+        {/if}
+      {/each}
+    </div>
+    <!-- Legend -->
+    <div class="cal-legend">
+      <span class="cal-leg-item"><span class="cal-ld cld-gold"></span>Goal met</span>
+      <span class="cal-leg-item"><span class="cal-ld cld-active"></span>Active</span>
+      <span class="cal-leg-item"><span class="cal-ld cld-rest"></span>Rest</span>
+    </div>
+  </div>
+
+  <!-- ── Day Detail Sheet ──────────────────────────────────────────── -->
+  {#if showDaySheet && selectedDay}
+    <div class="cal-backdrop" role="dialog" aria-modal="true"
+      tabindex="-1"
+      onclick={() => showDaySheet = false}
+      onkeydown={(e) => e.key === 'Escape' && (showDaySheet = false)}>
+      <button class="backdrop-dismiss" onclick={() => showDaySheet = false} aria-label="Close"></button>
+      <div class="sheet animate-slide-up">
+        <div class="sheet-handle"></div>
+        <div class="ds-head">
+          <span class="ds-dow">
+            {new Date(selectedDay.ds + 'T12:00:00').toLocaleString('default',{weekday:'long'})}
+          </span>
+          <span class="ds-date">
+            {new Date(selectedDay.ds + 'T12:00:00').toLocaleString('default',{month:'long',day:'numeric',year:'numeric'})}
+          </span>
+        </div>
+        <div class="ds-status-row">
+          {#if selectedDayStatus === 'rest'}
+            <span class="ds-pill ds-rest">🛌 Rest Day</span>
+          {:else if selectedDayStatus === 'gold'}
+            <span class="ds-pill ds-gold">🥇 Goal Met — {fmtH(selectedDayMins)}</span>
+          {:else if selectedDayStatus === 'active'}
+            <span class="ds-pill ds-active">⚡ Active — {fmtH(selectedDayMins)}</span>
+          {:else}
+            <span class="ds-pill ds-empty">No activity logged</span>
+          {/if}
+        </div>
+        <div class="divider"></div>
+        {#if dayEntries.length > 0}
+          <p class="section-label" style="margin-bottom:10px">Sessions</p>
+          {#each dayEntries as entry (entry.id)}
+            <div class="ds-entry">
+              <div class="ds-info">
+                <span class="ds-method">{entry.methodLabel ?? entry.method}</span>
+                <span class="ds-dur">{fmtH(entry.dur)}</span>
+              </div>
+              <div class="ds-btns">
+                <button class="ds-btn ds-edit" onclick={() => openEditCalEntry(entry)}>✏</button>
+                <button class="ds-btn ds-del"  onclick={() => deleteCalEntry(entry.id)}>🗑</button>
+              </div>
+            </div>
+          {/each}
+        {:else if selectedDay.status !== 'rest'}
+          <p class="ds-empty-msg">No sessions recorded for this day.</p>
+        {/if}
+        <button class="btn-ghost" style="margin-top:20px;width:100%" onclick={() => showDaySheet = false}>Close</button>
+      </div>
+    </div>
+  {/if}
+
+  <!-- ── Edit Calendar Entry ────────────────────────────────────────── -->
+  {#if showEditCalSheet && editingCalEntry}
+    <div class="cal-backdrop" role="dialog" aria-modal="true"
+      tabindex="-1"
+      onclick={() => showEditCalSheet = false}
+      onkeydown={(e) => e.key === 'Escape' && (showEditCalSheet = false)}>
+      <button class="backdrop-dismiss" onclick={() => showEditCalSheet = false} aria-label="Close"></button>
+      <div class="sheet animate-slide-up">
+        <div class="sheet-handle"></div>
+        <h2 class="cal-edit-title">Edit Session</h2>
+        <p class="section-label" style="margin-bottom:6px">Duration (minutes)</p>
+        <div style="position:relative;display:flex;align-items:center;margin-bottom:20px">
+          <input type="number" class="input-field"
+            style="font-size:24px;font-weight:800;text-align:center;padding:14px 50px 14px 14px;font-variant-numeric:tabular-nums"
+            bind:value={editCalDur} min="1"
+          />
+          <span style="position:absolute;right:14px;font-size:13px;font-weight:600;color:var(--color-text-3)">min</span>
+        </div>
+        <p class="section-label" style="margin-bottom:8px">Method</p>
+        <div class="ce-pills">
+          {#each ALL_METHODS_FLAT as m}
+            <button class="ce-pill" class:ce-pill-sel={editCalMethod?.id === m.id}
+              onclick={() => editCalMethod = m}>{m.label}</button>
+          {/each}
+        </div>
+        <button class="btn-primary" style="margin-top:20px" onclick={saveEditCalEntry}>Save Changes</button>
+        <button class="btn-ghost"   style="margin-top:8px"  onclick={() => showEditCalSheet = false}>Cancel</button>
+      </div>
+    </div>
+  {/if}
 
 <!-- ── This Week daily bars ──────────────────────────────────────── -->
   <div class="surface-card cc">
@@ -476,122 +630,7 @@
     {/if}
   </div>
 
-<!-- ── Activity Calendar ─────────────────────────────────────────── -->
-  <div class="surface-card cc">
-    <!-- Month/year nav -->
-    <div class="cal-header">
-      <button class="cal-nav-btn" onclick={calPrev}>‹</button>
-      <span class="cal-month-label">{calMonthLabel}</span>
-      <button class="cal-nav-btn" onclick={calNext} disabled={calIsAtCurrent}>›</button>
-    </div>
-    <!-- Day-of-week headers -->
-    <div class="cal-dow-row">
-      {#each CAL_DOW as d}<div class="cal-dow">{d}</div>{/each}
-    </div>
-    <!-- Day grid -->
-    <div class="cal-grid">
-      {#each calDays as cell}
-        {#if cell === null}
-          <div class="cal-cell cal-pad"></div>
-        {:else}
-          <button
-            class="cal-cell"
-            class:cal-gold={cell.status === 'gold'}
-            class:cal-active={cell.status === 'active'}
-            class:cal-rest={cell.status === 'rest'}
-            class:cal-today={cell.isToday}
-            class:cal-future={cell.isFut}
-            onclick={() => openCalDay(cell)}
-            disabled={cell.isFut}
-          >
-            <span class="cal-num">{cell.d}</span>
-          </button>
-        {/if}
-      {/each}
-    </div>
-    <!-- Legend -->
-    <div class="cal-legend">
-      <span class="cal-leg-item"><span class="cal-ld cld-gold"></span>Goal met</span>
-      <span class="cal-leg-item"><span class="cal-ld cld-active"></span>Active</span>
-      <span class="cal-leg-item"><span class="cal-ld cld-rest"></span>Rest</span>
-    </div>
-  </div>
 
-  <!-- ── Day Detail Sheet ──────────────────────────────────────────── -->
-  {#if showDaySheet && selectedDay}
-    <div class="cal-backdrop" role="dialog" aria-modal="true"
-      onclick={() => showDaySheet = false}>
-      <div class="sheet animate-slide-up" onclick={(e) => e.stopPropagation()}>
-        <div class="sheet-handle"></div>
-        <div class="ds-head">
-          <span class="ds-dow">
-            {new Date(selectedDay.ds + 'T12:00:00').toLocaleString('default',{weekday:'long'})}
-          </span>
-          <span class="ds-date">
-            {new Date(selectedDay.ds + 'T12:00:00').toLocaleString('default',{month:'long',day:'numeric',year:'numeric'})}
-          </span>
-        </div>
-        <div class="ds-status-row">
-          {#if selectedDayStatus === 'rest'}
-            <span class="ds-pill ds-rest">🛌 Rest Day</span>
-          {:else if selectedDayStatus === 'gold'}
-            <span class="ds-pill ds-gold">🥇 Goal Met — {fmtH(selectedDayMins)}</span>
-          {:else if selectedDayStatus === 'active'}
-            <span class="ds-pill ds-active">⚡ Active — {fmtH(selectedDayMins)}</span>
-          {:else}
-            <span class="ds-pill ds-empty">No activity logged</span>
-          {/if}
-        </div>
-        <div class="divider"></div>
-        {#if dayEntries.length > 0}
-          <p class="section-label" style="margin-bottom:10px">Sessions</p>
-          {#each dayEntries as entry (entry.id)}
-            <div class="ds-entry">
-              <div class="ds-info">
-                <span class="ds-method">{entry.methodLabel ?? entry.method}</span>
-                <span class="ds-dur">{fmtH(entry.dur)}</span>
-              </div>
-              <div class="ds-btns">
-                <button class="ds-btn ds-edit" onclick={() => openEditCalEntry(entry)}>✏</button>
-                <button class="ds-btn ds-del"  onclick={() => deleteCalEntry(entry.id)}>🗑</button>
-              </div>
-            </div>
-          {/each}
-        {:else if selectedDay.status !== 'rest'}
-          <p class="ds-empty-msg">No sessions recorded for this day.</p>
-        {/if}
-        <button class="btn-ghost" style="margin-top:20px;width:100%" onclick={() => showDaySheet = false}>Close</button>
-      </div>
-    </div>
-  {/if}
-
-  <!-- ── Edit Calendar Entry ────────────────────────────────────────── -->
-  {#if showEditCalSheet && editingCalEntry}
-    <div class="cal-backdrop" role="dialog" aria-modal="true"
-      onclick={() => showEditCalSheet = false}>
-      <div class="sheet animate-slide-up" onclick={(e) => e.stopPropagation()}>
-        <div class="sheet-handle"></div>
-        <h2 class="cal-edit-title">Edit Session</h2>
-        <p class="section-label" style="margin-bottom:6px">Duration (minutes)</p>
-        <div style="position:relative;display:flex;align-items:center;margin-bottom:20px">
-          <input type="number" class="input-field"
-            style="font-size:24px;font-weight:800;text-align:center;padding:14px 50px 14px 14px;font-variant-numeric:tabular-nums"
-            bind:value={editCalDur} min="1"
-          />
-          <span style="position:absolute;right:14px;font-size:13px;font-weight:600;color:var(--color-text-3)">min</span>
-        </div>
-        <p class="section-label" style="margin-bottom:8px">Method</p>
-        <div class="ce-pills">
-          {#each ALL_METHODS_FLAT as m}
-            <button class="ce-pill" class:ce-pill-sel={editCalMethod?.id === m.id}
-              onclick={() => editCalMethod = m}>{m.label}</button>
-          {/each}
-        </div>
-        <button class="btn-primary" style="margin-top:20px" onclick={saveEditCalEntry}>Save Changes</button>
-        <button class="btn-ghost"   style="margin-top:8px"  onclick={() => showEditCalSheet = false}>Cancel</button>
-      </div>
-    </div>
-  {/if}
 
   <!-- ── Smart Insight ─────────────────────────────────────────────── -->
   <div class="surface-violet ins-card animate-slide-up">
@@ -612,12 +651,6 @@
     cursor:pointer; transition:all 150ms; text-align:center;
   }
   .rpill.active { background:var(--color-accent-tint); border-color:var(--color-accent-ring); color:var(--color-accent); }
-
-  .sum-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-  .sc { display:flex; flex-direction:column; align-items:center; gap:5px; padding:14px 10px; text-align:center; }
-  .sc-val { font-size:22px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
-  .sc-den { font-size:13px; font-weight:600; color:var(--color-text-3); }
-  .sc-key { font-size:9px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--color-text-3); }
 
   /* Weekly Recap */
   .wkr-card { padding:16px; }
@@ -652,8 +685,6 @@
   :global(.ds-t)   { font:600 10px 'Inter Variable',sans-serif; fill:var(--color-text-3); letter-spacing:0.03em; }
 
   .wk-svg { width:100%; display:block; overflow:visible; }
-  .wk-bar { transition:opacity 150ms; }
-  .wk-bar:hover { opacity:0.75; cursor:default; }
   .tw-legend { margin-top:8px; }
   .tw-hint { font-size:9px; color:var(--color-text-4); font-weight:600; }
 
@@ -746,4 +777,18 @@
   .ins-card { display:flex; align-items:flex-start; gap:12px; padding:16px; border-radius:var(--radius-lg); }
   .ins-icon { font-size:20px; flex-shrink:0; line-height:1.4; }
   .ins-txt { font-size:13px; line-height:1.65; color:var(--color-text-2); }
+
+  /* ── Custom date range picker ──────────────────────────────────────── */
+  .custom-range-row {
+    display: flex; align-items: flex-end; gap: 10px;
+    padding: 12px 14px;
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-accent-ring);
+    border-radius: var(--radius-md);
+    margin-top: -4px;
+  }
+  .cr-group { display: flex; flex-direction: column; gap: 5px; flex: 1; }
+  .cr-label { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; color: var(--color-text-3); }
+  .cr-input { padding: 9px 10px; font-size: 12px; color-scheme: dark; }
+  .cr-sep { font-size: 16px; color: var(--color-text-4); padding-bottom: 8px; flex-shrink: 0; }
 </style>

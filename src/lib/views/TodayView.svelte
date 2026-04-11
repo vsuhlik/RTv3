@@ -68,6 +68,14 @@
         { id: 'm5', label: 'M5' },
       ]
     },
+    { id: 'retaining', label: 'Retaining', icon: '○',
+      methods: [
+        { id: 'ret_manual',  label: 'Manual Retain'     },
+        { id: 'ret_device',  label: 'Retaining Device'  },
+        { id: 'ret_tape',    label: 'T-Tape'            },
+        { id: 'ret_skin',    label: 'Skin Retaining'    },
+      ]
+    },
     { id: 'other', label: 'Other / Custom', icon: '✴', methods: [] },
   ];
 
@@ -91,6 +99,22 @@
   let editDateValue    = $state('');
   let editGoalValue    = $state('');
 
+  // ── Log Past Session ──────────────────────────────────────────────────
+  let showLogPast      = $state(false);
+  let pastStart        = $state('');
+  let pastEnd          = $state('');
+
+  // ── Goal contribution toggle ─────────────────────────────────────────
+  let countTowardGoal  = $state(true);
+  let isRetaining      = $derived(
+    selectedMethod
+      ? (groups.find(g => g.id === 'retaining')?.methods.some(m => m.id === selectedMethod.id) ?? false)
+      : false
+  );
+  $effect(() => {
+    if (selectedMethod) countTowardGoal = !isRetaining;
+  });
+
   // ── Ring tap ──────────────────────────────────────────────────────────
   function onRingTap() {
     if ($activeSession) {
@@ -106,7 +130,7 @@
   // ── Session lifecycle ─────────────────────────────────────────────────
   function handleStart() {
     if (!selectedMethod) return;
-    startTimer({ method: selectedMethod.id, methodLabel: selectedMethod.label, category: 'active' });
+    startTimer({ method: selectedMethod.id, methodLabel: selectedMethod.label, category: 'active', countTowardGoal });
     showMethodSheet = false;
     selectedMethod = null;
   }
@@ -132,6 +156,7 @@ function handleStop() {
       tension: 'med',
       notes: '',
       isRest: false,
+      countTowardGoal: session.countTowardGoal !== false,
     };
     console.log('[handleStop] adding entry:', entry);
     logs.add(entry);
@@ -214,7 +239,42 @@ function applyEditTime() {
     newMethodName = ''; addingToGroup = null;
   }
 
-// ── Session accordion ─────────────────────────────────────────────────
+// ── Log Past Session ──────────────────────────────────────────────────
+  function logPastSession() {
+    if (!selectedMethod || !pastStart || !pastEnd) return;
+    const startTs = new Date(pastStart).getTime();
+    const endTs   = new Date(pastEnd).getTime();
+    if (isNaN(startTs) || isNaN(endTs) || endTs <= startTs) return;
+    const dur  = Math.max(1, Math.round((endTs - startTs) / 60000));
+    const date = pastStart.slice(0, 10);
+    const entry = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      date,
+      startTs,
+      endTs,
+      dur,
+      method:       selectedMethod.id,
+      methodLabel:  selectedMethod.label,
+      category:     'active',
+      tension:      'med',
+      notes:        '',
+      isRest:       false,
+      countTowardGoal,
+    };
+    logs.add(entry);
+    char.update(c => ({
+      ...c,
+      totalMinutes:  (c.totalMinutes  || 0) + dur,
+      totalSessions: (c.totalSessions || 0) + 1,
+    }));
+    showLogPast     = false;
+    showMethodSheet = false;
+    selectedMethod  = null;
+    pastStart       = '';
+    pastEnd         = '';
+    showSavedToast  = true;
+    setTimeout(() => { showSavedToast = false; }, 2800);
+  }
   let expandedSessionId    = $state(/** @type {string|null} */(null));
   let showEditSessionSheet = $state(false);
   let editingSession       = $state(/** @type {any} */(null));
@@ -514,12 +574,37 @@ let ringSubText = $derived(
         {/each}
       </div>
 
-      <button class="btn-primary" style="margin-top:20px"
+      <!-- ── Goal contribution toggle ──────────────────────────── -->
+      {#if selectedMethod}
+        <div class="goal-toggle-row">
+          <div class="goal-toggle-info">
+            <span class="goal-toggle-label">Count toward daily goal</span>
+            {#if isRetaining}
+              <span class="goal-toggle-hint">Retaining is off by default</span>
+            {/if}
+          </div>
+          <button
+            class="toggle-btn"
+            class:toggle-on={countTowardGoal}
+            onclick={() => countTowardGoal = !countTowardGoal}
+            aria-label="Toggle goal contribution"
+          >
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+      {/if}
+
+      <button class="btn-primary" style="margin-top:16px"
         disabled={!selectedMethod} onclick={handleStart}
       >
         ▶ Start — {selectedMethod?.label ?? 'select a method above'}
       </button>
-      <button class="btn-ghost" style="margin-top:8px" onclick={() => { showMethodSheet = false; selectedMethod = null; }}>
+      <button class="btn-ghost" style="margin-top:8px;width:100%"
+        disabled={!selectedMethod} onclick={() => showLogPast = true}
+      >
+        📋 Log Past Session
+      </button>
+      <button class="btn-ghost" style="margin-top:6px" onclick={() => { showMethodSheet = false; selectedMethod = null; }}>
         Cancel
       </button>
     </div>
@@ -528,7 +613,73 @@ let ringSubText = $derived(
 
 
 <!-- ════════════════════════════════════════════════════════════════════ -->
-<!-- SHEET — Active Session ───────────────────────────────────────────── -->
+<!-- SHEET — Log Past Session ────────────────────────────────────────── -->
+{#if showLogPast && selectedMethod}
+  <div class="sheet-backdrop" role="dialog" aria-modal="true" aria-label="Log past session">
+    <button class="backdrop-dismiss" onclick={() => showLogPast = false} aria-label="Close"></button>
+    <div class="sheet animate-slide-up">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">Log Past Session</h2>
+      <p class="sheet-hint">
+        Method: <strong style="color:var(--color-accent)">{selectedMethod.label}</strong>
+      </p>
+
+      <p class="section-label" style="margin-bottom:6px">Session Start</p>
+      <input
+        type="datetime-local"
+        class="input-field"
+        style="margin-bottom:14px;color-scheme:dark"
+        bind:value={pastStart}
+        max={pastEnd || new Date().toISOString().slice(0,16)}
+      />
+
+      <p class="section-label" style="margin-bottom:6px">Session End</p>
+      <input
+        type="datetime-local"
+        class="input-field"
+        style="margin-bottom:10px;color-scheme:dark"
+        bind:value={pastEnd}
+        min={pastStart}
+        max={new Date().toISOString().slice(0,16)}
+      />
+
+      {#if pastStart && pastEnd && new Date(pastEnd) > new Date(pastStart)}
+        <div class="past-dur-preview">
+          ⏱ {fmtMin(Math.round((new Date(pastEnd).getTime() - new Date(pastStart).getTime()) / 60000))}
+        </div>
+      {:else if pastStart && pastEnd}
+        <p class="past-err">End time must be after start time.</p>
+      {/if}
+
+      <div class="goal-toggle-row" style="margin-top:14px">
+        <div class="goal-toggle-info">
+          <span class="goal-toggle-label">Count toward daily goal</span>
+          {#if isRetaining}
+            <span class="goal-toggle-hint">Retaining is off by default</span>
+          {/if}
+        </div>
+        <button
+          class="toggle-btn"
+          class:toggle-on={countTowardGoal}
+          onclick={() => countTowardGoal = !countTowardGoal}
+          aria-label="Toggle goal contribution"
+        >
+          <span class="toggle-knob"></span>
+        </button>
+      </div>
+
+      <button class="btn-primary" style="margin-top:20px"
+        disabled={!pastStart || !pastEnd || new Date(pastEnd) <= new Date(pastStart)}
+        onclick={logPastSession}
+      >
+        💾 Save Past Session
+      </button>
+      <button class="btn-ghost" style="margin-top:8px" onclick={() => showLogPast = false}>
+        ← Back
+      </button>
+    </div>
+  </div>
+{/if}
 {#if showSessionSheet}
   <div class="sheet-backdrop" role="dialog" aria-modal="true" aria-label="Active session">
     <button class="backdrop-dismiss" onclick={() => showSessionSheet = false} aria-label="Close"></button>
@@ -757,12 +908,6 @@ let ringSubText = $derived(
   box-shadow: 0 0 14px oklch(75% 0.19 55 / 0.25);
 }
 .rest-toast { top: 112px !important; }
-.rest-notice {
-  display: flex; align-items: center; gap: 8px;
-  padding: 12px 16px; background: var(--color-surface-2);
-  border-radius: var(--radius-lg); font-size: 13px; color: var(--color-text-2);
-  margin-bottom: 4px;
-}
 
 /* ── Today log ────────────────────────────────────────────────────────── */
 .today-log { margin-top: 20px; }
@@ -893,19 +1038,6 @@ let ringSubText = $derived(
   background: none; border: none; cursor: pointer; z-index: 0;
 }
 .sheet { position: relative; z-index: 1; }
-  .save-confirm-wrap {
-    display: flex; flex-direction: column; align-items: center;
-    gap: 8px; padding: 16px 0 8px;
-  }
-  .save-check {
-    font-size: 48px; color: var(--color-positive);
-    line-height: 1;
-  }
-  .save-confirm-text {
-    font-size: 18px; font-weight: 700;
-    color: var(--color-text-1);
-    font-family: var(--font-display);
-  }
 
   /* ── Saved toast ──────────────────────────────────────────────────────── */
   .saved-toast {
@@ -921,4 +1053,37 @@ let ringSubText = $derived(
     pointer-events: none;
   }
   .saved-toast-check { font-size: 16px; }
+
+  /* ── Goal toggle ──────────────────────────────────────────────────────── */
+  .goal-toggle-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px;
+    background: var(--color-surface-2); border: 1px solid var(--color-edge);
+    border-radius: var(--radius-md);
+  }
+  .goal-toggle-info { display: flex; flex-direction: column; gap: 3px; }
+  .goal-toggle-label { font-size: 13px; font-weight: 600; color: var(--color-text-1); }
+  .goal-toggle-hint  { font-size: 10px; color: var(--color-ci); font-weight: 600; }
+
+  .toggle-btn {
+    width: 44px; height: 26px; border-radius: 13px;
+    background: var(--color-edge); border: none; cursor: pointer;
+    position: relative; transition: background 250ms; flex-shrink: 0;
+  }
+  .toggle-btn.toggle-on { background: var(--color-accent); }
+  .toggle-knob {
+    position: absolute; top: 3px; left: 3px;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: white; transition: transform 250ms var(--ease-spring);
+  }
+  .toggle-btn.toggle-on .toggle-knob { transform: translateX(18px); }
+
+  /* ── Past session preview ─────────────────────────────────────────────── */
+  .past-dur-preview {
+    text-align: center; padding: 8px 16px;
+    background: var(--color-accent-tint); border: 1px solid var(--color-accent-ring);
+    border-radius: var(--radius-pill); font-size: 14px; font-weight: 700;
+    color: var(--color-accent);
+  }
+  .past-err { font-size: 11px; color: var(--color-critical); text-align: center; margin-top: 4px; }
 </style>

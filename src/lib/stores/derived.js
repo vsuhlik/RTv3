@@ -1,7 +1,7 @@
 import { derived } from 'svelte/store';
 import { char } from './profile.js';
 import { logs } from './logs.js';
-import { timerSecs } from './timer.js';
+import { activeSession, timerSecs } from './timer.js';
 
 // Returns today's date string in 'YYYY-MM-DD' format
 export function todayStr() {
@@ -15,10 +15,12 @@ export const todayLogs = derived(logs, $l =>
 
 // Total minutes today = committed logs + live timer seconds
 export const todayMin = derived(
-  [todayLogs, timerSecs],
-  ([$tl, $ts]) => {
-    const committed = $tl.reduce((sum, l) => sum + (l.dur || 0), 0);
-    return committed + Math.floor($ts / 60);
+  [todayLogs, timerSecs, activeSession],
+  ([$tl, $ts, $as]) => {
+    const committed = $tl.reduce((sum, l) =>
+      sum + (l.countTowardGoal !== false ? (l.dur || 0) : 0), 0);
+    const timerCounts = $as?.countTowardGoal !== false;
+    return committed + (timerCounts ? Math.floor($ts / 60) : 0);
   }
 );
 
