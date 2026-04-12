@@ -1,9 +1,10 @@
-@import '@fontsource-variable/inter';
-@import '@fontsource/cinzel/700.css';
-@import '@fontsource/cinzel/900.css';
-@import "tailwindcss";
+@import '@fontsource-variable/syne';
+@import '@fontsource-variable/dm-sans';
+@import '@fontsource/geist-mono/400.css';
+@import '@fontsource/geist-mono/700.css';
+@import '@fontsource/space-grotesk/700.css';
 
-@theme {
+:root {
   /* ── BASE SURFACES (deep inky purple-black) ─────────────────────────── */
   --color-base:       oklch(9% 0.025 280);
   --color-surface-1:  oklch(12% 0.03 278);
@@ -52,8 +53,10 @@
   --color-critical-bg:   oklch(65% 0.22 25 / 0.08);
 
   /* ── TYPOGRAPHY ──────────────────────────────────────────────────────── */
-  --font-sans:    'Inter Variable', system-ui, sans-serif;
-  --font-display: 'Cinzel', Georgia, serif;
+--font-sans:    'DM Sans Variable', system-ui, sans-serif;
+--font-display: 'Syne Variable', Georgia, sans-serif;
+--font-mono:    'Geist Mono', 'JetBrains Mono', monospace;
+--font-accent:  'Space Grotesk', system-ui, sans-serif;
 
   /* ── RADII ───────────────────────────────────────────────────────────── */
   --radius-xs:   4px;
@@ -76,6 +79,24 @@
   --shadow-pill-nav: 0 8px 32px oklch(0% 0 0 / 0.6), 0 0 0 1px var(--color-accent-ring), 0 0 20px var(--color-accent-dim);
   --shadow-glow-violet: 0 0 40px var(--color-accent-glow);
   --shadow-glow-health: 0 0 40px var(--color-health-dim);
+
+  /* ── AURORA GRADIENTS (living background animations) ─── */
+--aurora-1: oklch(35% 0.18 285);   /* deep violet */
+--aurora-2: oklch(28% 0.14 240);   /* midnight blue */
+--aurora-3: oklch(22% 0.08 320);   /* deep rose shadow */
+--aurora-4: oklch(18% 0.06 180);   /* abyssal teal */
+
+/* ── NEON SURFACE GLOWS (card rim lighting) ───────────── */
+--glow-violet-strong: 0 0 60px oklch(72% 0.22 292 / 0.5),
+                      0 0 120px oklch(72% 0.22 292 / 0.2);
+--glow-gold-strong:   0 0 60px oklch(75% 0.19 55 / 0.5),
+                      0 0 120px oklch(75% 0.19 55 / 0.2);
+--glow-health-strong: 0 0 60px oklch(72% 0.18 180 / 0.5);
+
+/* ── GLASS SURFACES (upgraded from current) ─────────── */
+--glass-bg:    oklch(16% 0.04 278 / 0.55);
+--glass-noise: url("data:image/svg+xml,..."); /* grain texture */
+--glass-border: oklch(100% 0 0 / 0.08);
 }
 
 /* ── RESET ──────────────────────────────────────────────────────────────── */
@@ -94,16 +115,20 @@ html {
 
 body {
   background-color: var(--color-base);
-  /* Subtle radial glow at top — the "velvety" effect */
   background-image:
-    radial-gradient(ellipse 80% 40% at 50% -10%,
-      oklch(25% 0.08 285 / 0.6) 0%,
-      transparent 70%);
+    radial-gradient(ellipse 120% 60% at 20% 0%,
+      oklch(28% 0.12 285 / 0.7) 0%, transparent 60%),
+    radial-gradient(ellipse 80% 40% at 80% 100%,
+      oklch(22% 0.08 240 / 0.5) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 30% at 50% 50%,
+      oklch(18% 0.06 320 / 0.25) 0%, transparent 70%);
   background-attachment: fixed;
-  color: var(--color-text-1);
-  font-family: var(--font-sans);
-  min-height: 100dvh;
-  overflow-x: hidden;
+  animation: aurora-shift 20s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-shift {
+  0%   { background-position: 0% 0%, 100% 100%, 50% 50%; }
+  100% { background-position: 30% 20%, 70% 80%, 60% 40%; }
 }
 
 .tabular { font-variant-numeric: tabular-nums; }
@@ -149,6 +174,23 @@ body {
   background: var(--color-surface-1);
   box-shadow: var(--shadow-card);
   border-radius: var(--radius-lg);
+  position: relative;
+  overflow: hidden;
+}
+.surface-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+  opacity: 0.028;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.surface-card + .surface-card {
+  margin-top: 0; /* gap handled by parent flex */
 }
 .surface-card-raised {
   background: var(--color-surface-2);
@@ -162,11 +204,44 @@ body {
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--color-accent-ring);
   border-radius: var(--radius-xl);
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.07),
+    inset 0 -1px 0 oklch(0% 0 0 / 0.25),
+    0 20px 60px oklch(0% 0 0 / 0.35);
+  position: relative;
+  overflow: hidden;
+}
+.surface-glass::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+  opacity: 0.03;
+  pointer-events: none;
+  z-index: 1;
 }
 .surface-violet {
   background: var(--color-accent-tint);
   border: 1px solid var(--color-accent-ring);
   border-radius: var(--radius-lg);
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.06),
+    0 0 24px oklch(72% 0.22 292 / 0.08);
+  position: relative;
+  overflow: hidden;
+}
+.surface-violet::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+  opacity: 0.025;
+  pointer-events: none;
+  z-index: 1;
 }
 .surface-health {
   background: var(--color-health-tint);
@@ -353,3 +428,88 @@ body {
 /* ── GLOW UTILITIES ──────────────────────────────────────────────────────── */
 .glow-violet { box-shadow: var(--shadow-glow-violet); }
 .glow-health  { box-shadow: var(--shadow-glow-health); }
+
+/* ── SECTION DIVIDER ─────────────────────────────────────────────────────── */
+.section-gap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.section-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.section-title {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-text-3);
+  padding: 0 2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-edge);
+  opacity: 0.6;
+}
+
+/* ── CARD VARIANTS ───────────────────────────────────────────────────────── */
+.card-inset {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-edge-soft);
+  border-radius: var(--radius-md);
+  padding: 14px;
+}
+
+.card-accent-top {
+  border-top: 2px solid var(--color-accent);
+}
+
+.card-health-top {
+  border-top: 2px solid var(--color-health);
+}
+
+.card-ci-top {
+  border-top: 2px solid var(--color-ci);
+}
+
+/* ── Animated gradient border (featured cards) ───────────────────────── */
+@property --border-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+.card-live-border {
+  position: relative;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+}
+.card-live-border::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--border-angle),
+    var(--color-accent-lo)   0%,
+    var(--color-accent)      25%,
+    var(--color-ci)          50%,
+    var(--color-accent)      75%,
+    var(--color-accent-lo)   100%
+  );
+  z-index: -1;
+  animation: border-spin 8s linear infinite;
+  opacity: 0.7;
+}
+@keyframes border-spin {
+  to { --border-angle: 360deg; }
+}

@@ -10,11 +10,11 @@
 
   // ── Method group → color (consistent across every chart) ──────────────
   const GROUPS = [
-    { key:'devices',   label:'Devices',   ids:['tugger','dtr','cat2q','pud','tlc','dual'], color:'oklch(72% 0.22 292)' },
-    { key:'manual',    label:'Manual',    ids:['m1','m2','m3','m4','m5'],                  color:'oklch(72% 0.18 180)' },
-    { key:'packing',   label:'Packing',   ids:['packing'],                                color:'oklch(75% 0.19 55)'  },
-    { key:'inflation', label:'Inflation', ids:['inflation'],                              color:'oklch(72% 0.18 150)' },
-    { key:'other',     label:'Other',     ids:[],                                          color:'oklch(62% 0.15 310)' },
+    { key:'devices',   label:'Devices',   ids:['tugger','dtr','cat2q','pud','tlc','dual'],                         color:'oklch(72% 0.22 292)' },
+    { key:'manual',    label:'Manual',    ids:['m1','m2','m3','m4','m5'],                                          color:'oklch(72% 0.18 180)' },
+    { key:'retaining', label:'Retaining', ids:['ret_manual','ret_device','ret_tape','ret_skin','packing'],         color:'oklch(75% 0.19 55)'  },
+    { key:'inflation', label:'Inflation', ids:['inflation'],                                                       color:'oklch(72% 0.18 150)' },
+    { key:'other',     label:'Other',     ids:[],                                                                   color:'oklch(62% 0.15 310)' },
   ];
   function grp(id) { return GROUPS.find(g => g.ids.includes(id)) ?? GROUPS[4]; }
 
@@ -351,6 +351,7 @@
 <div class="rv">
 
   <!-- ── Range selector ───────────────────────────────────────────── -->
+  <div class="section-block">
   <div class="range-row">
     {#each RANGES as r}
       <button class="rpill" class:active={range === r} onclick={() => range = r}>{r}</button>
@@ -376,20 +377,23 @@
       </div>
     </div>
   {/if}
+  </div><!-- /section-block range -->
 
   <!-- ── Weekly Recap card ──────────────────────────────────────────── -->
-  <div class="surface-card wkr-card">
+  <div class="section-block">
+  <p class="section-title">This Week</p>
+  <div class="surface-card wkr-card card-accent-top card-featured">
     <div class="wkr-header">
       <span class="section-label" style="margin-bottom:0">Weekly Recap</span>
       <span class="wkr-range">{weekRecap.label}</span>
     </div>
     <div class="wkr-grid">
       <div class="wkr-cell">
-        <span class="wkr-val gradient-text-violet">{weekRecap.sessions}</span>
+        <span class="wkr-val" style="color:var(--color-accent)">{weekRecap.sessions}</span>
         <span class="wkr-key">Sessions</span>
       </div>
       <div class="wkr-cell">
-        <span class="wkr-val gradient-text-health">{fmtH(weekRecap.totalMins)}</span>
+        <span class="wkr-val" style="color:var(--color-health)">{fmtH(weekRecap.totalMins)}</span>
         <span class="wkr-key">Total TUT</span>
       </div>
       <div class="wkr-cell">
@@ -404,8 +408,11 @@
       </div>
     </div>
   </div>
+  </div><!-- /section-block weekly -->
 
   <!-- ── Activity Calendar ─────────────────────────────────────────── -->
+  <div class="section-block">
+  <p class="section-title">Activity</p>
   <div class="surface-card cc">
     <!-- Month/year nav -->
     <div class="cal-header">
@@ -527,9 +534,10 @@
       </div>
     </div>
   {/if}
+</div>
 
 <!-- ── This Week daily bars ──────────────────────────────────────── -->
-  <div class="surface-card cc">
+  <div class="surface-card cc card-health-top">
     <div class="cc-hdr">
       <span class="section-label" style="margin-bottom:0">This Week</span>
       <span class="cc-sub">{thisWeekBars[0]?.date} – {thisWeekBars[6]?.date}</span>
@@ -570,7 +578,7 @@
   </div>
 
   <!-- ── Method Breakdown — ALWAYS RENDERED ───────────────────────── -->
-  <div class="surface-card cc">
+  <div class="surface-card cc card-accent-top">
     <span class="section-label">Method Breakdown</span>
     {#if hasData}
       <div class="mb-row">
@@ -607,7 +615,7 @@
   </div>
 
   <!-- ── Time per Method — ALWAYS RENDERED ────────────────────────── -->
-  <div class="surface-card cc">
+  <div class="surface-card cc card-accent-top">
     <span class="section-label">Time per Method</span>
     {#if hasData && mTotals.length > 0}
       <div class="mt-bars">
@@ -633,7 +641,7 @@
 
 
   <!-- ── Smart Insight ─────────────────────────────────────────────── -->
-  <div class="surface-violet ins-card animate-slide-up">
+  <div class="surface-violet ins-card animate-slide-up card-featured-ci">
     <span class="ins-icon">💡</span>
     <p class="ins-txt">{insight}</p>
   </div>

@@ -2,9 +2,9 @@
   import { currentTab } from '$lib/stores/navigation.js';
   import TodayView   from '$lib/views/TodayView.svelte';
   import ReportsView from '$lib/views/ReportsView.svelte';
+  import JourneyView from '$lib/views/JourneyView.svelte';
 
   const TAB_STUBS = {
-    journey:   { icon: '◑',  title: 'Journey'   },
     photos:    { icon: '📸', title: 'Photos'    },
     badges:    { icon: '🏅', title: 'Badges'    },
     community: { icon: '👥', title: 'Community' },
@@ -17,6 +17,8 @@
   <TodayView />
 {:else if $currentTab === 'reports'}
   <ReportsView />
+{:else if $currentTab === 'journey'}
+  <JourneyView />
 {:else if stub}
   <div class="stub-view">
     <div class="surface-glass stub-hero animate-slide-up">

@@ -25,6 +25,7 @@
       aria-current={isActive ? 'page' : undefined}
     >
       <span class="icon-wrap">
+        {#key isActive}
         <svg
           width="20" height="20"
           viewBox="0 0 24 24"
@@ -34,9 +35,11 @@
           stroke-linecap="round"
           stroke-linejoin="round"
           aria-hidden="true"
+          class:icon-pop={isActive}
         >
           {@html ICONS[tab.id]}
         </svg>
+        {/key}
         {#if hasBadge}
           <span class="badge-dot" aria-hidden="true"></span>
         {/if}
@@ -136,5 +139,15 @@
       color: var(--color-text-1);
       background: oklch(100% 0 0 / 0.04);
     }
+  }
+
+  .icon-pop {
+    animation: nav-icon-pop 380ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    transform-origin: center;
+  }
+  @keyframes nav-icon-pop {
+    0%   { transform: scale(0.65) rotate(-8deg); opacity: 0.5; }
+    65%  { transform: scale(1.18) rotate(3deg);  opacity: 1;   }
+    100% { transform: scale(1)    rotate(0deg);  opacity: 1;   }
   }
 </style>

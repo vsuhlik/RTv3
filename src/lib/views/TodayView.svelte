@@ -7,7 +7,12 @@
   import { char }        from '$lib/stores/profile.js';
   import { logs }        from '$lib/stores/logs.js';
   import { activeSession, timerSecs, startTimer, stopTimer, updateSessionStart } from '$lib/stores/timer.js';
-  import { todayLogs, todayMin, goalPct, isRestDay, todayStr } from '$lib/stores/derived.js';
+import { todayLogs, todayMin, goalPct, isRestDay, todayStr } from '$lib/stores/derived.js';
+import LottieIcon from '$lib/components/LottieIcon.svelte';
+import autoAnimate from '@formkit/auto-animate';
+import { gsap } from 'gsap';
+import { fade } from 'svelte/transition';
+import { browser } from '$app/environment';
 
   // ── Ring geometry ─────────────────────────────────────────────────────
   const R = 108, CX = 140, CY = 140;
@@ -79,6 +84,21 @@
     { id: 'other', label: 'Other / Custom', icon: '✴', methods: [] },
   ];
 
+// ── Milestones ────────────────────────────────────────────────────────
+  const MILESTONES = [
+    { key: 'm_1hr',       check: c => (c.totalMinutes??0) >= 60,    emoji: '⏱', title: 'First Hour',      msg: 'Your first hour of TUT is in the books. The journey has officially started.' },
+    { key: 'm_10hr',      check: c => (c.totalMinutes??0) >= 600,   emoji: '🔥', title: '10 Hours TUT',    msg: '10 hours of consistent tension. Your skin is responding. Keep the momentum.' },
+    { key: 'm_50hr',      check: c => (c.totalMinutes??0) >= 3000,  emoji: '💪', title: '50 Hours TUT',    msg: "50 hours. You're past the point where most people quit. Real progress takes real time — and you're putting it in." },
+    { key: 'm_100hr',     check: c => (c.totalMinutes??0) >= 6000,  emoji: '🏆', title: '100 Hours TUT',   msg: "100 hours. That's 100 hours of choosing yourself. Of building something most people don't even know is possible. Keep going." },
+    { key: 'm_250hr',     check: c => (c.totalMinutes??0) >= 15000, emoji: '⚡', title: '250 Hours TUT',   msg: "250 hours in. You're not just restoring — you're one of the most committed restorers out there. This is rare dedication." },
+    { key: 'm_streak7',   check: c => (c.streak??0) >= 7,           emoji: '🗓', title: '7-Day Streak',    msg: "A full week without missing a day. That's not luck — that's discipline forming into habit." },
+    { key: 'm_streak30',  check: c => (c.streak??0) >= 30,          emoji: '🌙', title: '30-Day Streak',   msg: "30 days straight. A full month of showing up every single day. You're not just restoring — you're living it." },
+    { key: 'm_streak100', check: c => (c.streak??0) >= 100,         emoji: '👑', title: '100-Day Streak',  msg: "100 consecutive days. Less than 1% of restorers ever reach this. You're in rare company." },
+    { key: 'm_10sess',    check: c => (c.totalSessions??0) >= 10,   emoji: '✅', title: '10 Sessions',     msg: "Double digits. You've logged 10 sessions — the habit is starting to take root." },
+    { key: 'm_50sess',    check: c => (c.totalSessions??0) >= 50,   emoji: '🎯', title: '50 Sessions',     msg: "50 sessions logged. Consistency like this is what separates results from wishes." },
+    { key: 'm_100sess',   check: c => (c.totalSessions??0) >= 100,  emoji: '💯', title: '100 Sessions',    msg: "100 sessions. That number represents real, relentless effort. You've earned this moment." },
+  ];
+
   let groups = $derived(BASE_GROUPS.map(g => ({
     ...g,
     methods: [...g.methods, ...($char.customMethods ?? []).filter(m => m.groupId === g.id)],
@@ -98,6 +118,13 @@
   let editTimeValue    = $state('');
   let editDateValue    = $state('');
   let editGoalValue    = $state('');
+  let editTimeError    = $state('');
+  let editTimeSuccess  = $state(false);
+
+// ── Milestone state ───────────────────────────────────────────────────
+  let showMilestone    = $state(false);
+  let currentMilestone = $state(null);
+  let _milestoneInit   = false;
 
   // ── Log Past Session ──────────────────────────────────────────────────
   let showLogPast      = $state(false);
@@ -113,6 +140,33 @@
   );
   $effect(() => {
     if (selectedMethod) countTowardGoal = !isRetaining;
+  });
+
+// ── Rest day body class ───────────────────────────────────────────────
+  $effect(() => {
+    if (!browser) return;
+    if ($isRestDay) {
+      document.body.classList.add('rest-day-mode');
+    } else {
+      document.body.classList.remove('rest-day-mode');
+    }
+    return () => { if (browser) document.body.classList.remove('rest-day-mode'); };
+  });
+
+  // ── Milestone detection ───────────────────────────────────────────────
+  $effect(() => {
+    const c = $char;
+    if (!_milestoneInit) { _milestoneInit = true; return; }
+    if (!(c.totalSessions ?? 0)) return;
+    const seen = c.milestonesSeen ?? [];
+    const hit  = MILESTONES.find(m => !seen.includes(m.key) && m.check(c));
+    if (!hit) return;
+    char.update(cc => ({ ...cc, milestonesSeen: [...(cc.milestonesSeen ?? []), hit.key] }));
+    setTimeout(() => {
+      currentMilestone = hit;
+      showMilestone    = true;
+      setTimeout(() => { showMilestone = false; currentMilestone = null; }, 5200);
+    }, 1600);
   });
 
   // ── Ring tap ──────────────────────────────────────────────────────────
@@ -168,14 +222,30 @@ function handleStop() {
   }
 
 function applyEditTime() {
-    if (!editTimeValue || !$activeSession) return;
+    editTimeError = '';
+    if (!editTimeValue || !$activeSession) {
+      editTimeError = 'Please enter a valid time.';
+      return;
+    }
     const [hh, mm] = editTimeValue.split(':').map(Number);
     const dateStr  = editDateValue || new Date().toISOString().slice(0, 10);
     const [yr, mo, dy] = dateStr.split('-').map(Number);
     const newTs = new Date(yr, mo - 1, dy, hh, mm, 0).getTime();
-    if (isNaN(newTs) || newTs > Date.now()) return;
+    if (isNaN(newTs)) {
+      editTimeError = 'Invalid time — check the values.';
+      return;
+    }
+    if (newTs > Date.now()) {
+      editTimeError = 'Start time can\'t be in the future.';
+      return;
+    }
+
     updateSessionStart(newTs);
-    showEditTime = false;
+    editTimeSuccess = true;
+    setTimeout(() => {
+      editTimeSuccess = false;
+      showEditTime = false;
+    }, 1200);
   }
 
   function bumpStreak(dur) {
@@ -201,14 +271,19 @@ function applyEditTime() {
   let showRestToast = $state(false);
   let restToastMsg  = $state('');
 
+  function safeId() {
+    try { return crypto.randomUUID(); } catch {
+      return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    }
+  }
+
   function markRestDay() {
     if ($isRestDay) {
-      // Toggle OFF — remove today's rest entry
-      logs.setAll($logs.filter(l => !(l.date === todayStr() && l.isRest)));
+      logs.setAll(logs.get().filter(l => !(l.date === todayStr() && l.isRest)));
       restToastMsg = '✗ Rest day removed';
     } else {
       const today = todayStr();
-      logs.add({ id: crypto.randomUUID(), date: today, isRest: true, dur: 0 });
+      logs.add({ id: safeId(), date: today, isRest: true, dur: 0 });
       char.update(c => c.lastSessionDate === today ? c : { ...c, lastSessionDate: today });
       restToastMsg = '🛌 Rest day on — streak protected';
     }
@@ -322,18 +397,96 @@ function applyEditTime() {
     editingSession = null;
   }
 
+// ── GSAP animated display values ─────────────────────────────────────
+  let displayStreak   = $state($char.streak ?? 0);
+  let displayTodayMin = $state($todayMin);
+  let displayGoalPct  = $state($goalPct);
+
+  let _streakTween   = null;
+  let _totalMinTween = null;
+  let _goalPctTween  = null;
+
+  // Streak counter — fires whenever streak changes
+  $effect(() => {
+    const target = $char.streak ?? 0;
+    if (_streakTween) _streakTween.kill();
+    const obj = { val: displayStreak };
+    _streakTween = gsap.to(obj, {
+      val: target,
+      duration: 0.9,
+      ease: 'power3.out',
+      onUpdate: () => { displayStreak = Math.round(obj.val); }
+    });
+  });
+
+  // Today total + goal % — only animate when no live session running
+  $effect(() => {
+    if ($activeSession) return;
+    const target = $todayMin;
+    if (_totalMinTween) _totalMinTween.kill();
+    const obj = { val: displayTodayMin };
+    _totalMinTween = gsap.to(obj, {
+      val: target,
+      duration: 1.1,
+      ease: 'power2.out',
+      onUpdate: () => { displayTodayMin = Math.round(obj.val); }
+    });
+  });
+
+  $effect(() => {
+    if ($activeSession) return;
+    const target = $goalPct;
+    if (_goalPctTween) _goalPctTween.kill();
+    const obj = { val: displayGoalPct };
+    _goalPctTween = gsap.to(obj, {
+      val: target,
+      duration: 1.1,
+      ease: 'power2.out',
+      onUpdate: () => { displayGoalPct = Math.round(obj.val); }
+    });
+  });
+
   // ── Ring center display ───────────────────────────────────────────────
   let ringMainText = $derived(
-    $activeSession ? fmtLive($timerSecs) :
-    $todayMin > 0  ? fmtMin($todayMin)   : ''
+    $activeSession    ? fmtLive($timerSecs)      :
+    displayTodayMin > 0 ? fmtMin(displayTodayMin) : ''
   );
-let ringSubText = $derived(
-    $activeSession ? ($activeSession.methodLabel ?? $activeSession.method) :
-    isGoalMet      ? '🎯 Goal Reached'  :
-    $todayMin > 0  ? `${$goalPct}% of goal` : ''
+  let ringSubText = $derived(
+    $activeSession      ? ($activeSession.methodLabel ?? $activeSession.method) :
+    isGoalMet           ? '🎯 Goal Reached'                                     :
+    displayTodayMin > 0 ? `${displayGoalPct}% of goal`                         : ''
   );
   let showCTA = $derived(!$activeSession && $todayMin === 0);
+  // ── Comet head position ───────────────────────────────────────────────
+let cometAngle = $derived(((-90 + ($goalPct / 100) * 360) * Math.PI) / 180);
+let cometX = $derived(+(CX + R * Math.cos(cometAngle)).toFixed(2));
+let cometY = $derived(+(CY + R * Math.sin(cometAngle)).toFixed(2));
+let showComet = $derived($goalPct > 1 && $goalPct < 100);
 </script>
+
+<!-- ── Milestone overlay ─────────────────────────────────────────────── -->
+{#if showMilestone && currentMilestone}
+  <div
+    class="milestone-overlay"
+    transition:fade={{ duration: 500 }}
+    onclick={() => { showMilestone = false; currentMilestone = null; }}
+    onkeydown={(e) => e.key === 'Enter' && (showMilestone = false)}
+    role="dialog"
+    aria-modal="true"
+    aria-label="Milestone reached"
+    tabindex="0"
+  >
+    <div class="milestone-content animate-scale-in">
+      <div class="milestone-emoji">{currentMilestone.emoji}</div>
+      <h2 class="milestone-title">{currentMilestone.title}</h2>
+      <p class="milestone-msg">{currentMilestone.msg}</p>
+      <div class="milestone-prog-wrap">
+        <div class="milestone-prog-bar"></div>
+      </div>
+      <p class="milestone-hint">Tap to dismiss</p>
+    </div>
+  </div>
+{/if}
 
 <!-- ── Celebration burst ─────────────────────────────────────────────── -->
 {#if showCelebration}
@@ -363,13 +516,23 @@ let ringSubText = $derived(
   <div class="greeting">
     {greeting()}, <strong>{$char.name ?? 'Restorer'}</strong>
   </div>
-  <div class="streak-chip" class:lit={($char.streak ?? 0) > 0}>
-    🔥 <span class="streak-num">{$char.streak ?? 0}</span>
-  </div>
+<div class="streak-chip" class:lit={($char.streak ?? 0) > 0} class:card-live-border={($char.streak ?? 0) > 0}>
+  {#if ($char.streak ?? 0) > 0}
+    <LottieIcon
+      src="/animations/flame.lottie"
+      width={18}
+      height={18}
+      speed={1.2}
+    />
+  {:else}
+    <span style="opacity:0.4;font-size:16px">🔥</span>
+  {/if}
+  <span class="streak-num">{displayStreak}</span>
+</div>
 </div>
 
 <!-- ── Hero Ring ─────────────────────────────────────────────────────── -->
-<div class="ring-stage">
+<div class="ring-stage" class:ring-rest={$isRestDay}>
   <button class="ring-btn" onclick={onRingTap} aria-label="Open session controls">
     {#if $activeSession}
       <div class="ring-pulse" aria-hidden="true"></div>
@@ -386,9 +549,18 @@ let ringSubText = $derived(
           <stop offset="100%" stop-color="var(--color-ci-hi)"/>
         </linearGradient>
         <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="5" result="b"/>
-          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-        </filter>
+  <feGaussianBlur stdDeviation="5" result="b"/>
+  <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+</filter>
+<filter id="comet-glow" x="-80%" y="-80%" width="260%" height="260%">
+  <feGaussianBlur stdDeviation="6" result="blur1"/>
+  <feGaussianBlur stdDeviation="3" result="blur2" in="SourceGraphic"/>
+  <feMerge>
+    <feMergeNode in="blur1"/>
+    <feMergeNode in="blur2"/>
+    <feMergeNode in="SourceGraphic"/>
+  </feMerge>
+</filter>
       </defs>
 
       <!-- Dashed outer accent ring -->
@@ -414,6 +586,26 @@ let ringSubText = $derived(
         style="transition: stroke-dashoffset 700ms cubic-bezier(0.34,1.56,0.64,1), stroke 500ms ease"
       />
 
+<!-- Comet head at arc leading edge -->
+      {#if showComet}
+        <circle
+          cx={cometX} cy={cometY} r="12"
+          fill={isGoalMet ? 'var(--color-ci)' : 'var(--color-accent)'}
+          opacity="0.18"
+          filter="url(#comet-glow)"
+        />
+        <circle
+          cx={cometX} cy={cometY} r="6"
+          fill={isGoalMet ? 'var(--color-ci-hi)' : 'var(--color-accent-hi)'}
+          opacity="0.7"
+          filter="url(#comet-glow)"
+        />
+        <circle
+          cx={cometX} cy={cometY} r="3"
+          fill="oklch(97% 0.01 280)"
+          opacity="0.95"
+        />
+      {/if}
       <!-- Center: CTA (idle + no progress) -->
       {#if showCTA}
         <text x={CX} y={CY + 10} text-anchor="middle" class="rc-cta-main">Start</text>
@@ -447,14 +639,15 @@ let ringSubText = $derived(
     </button>
   </div>
   <div class="goal-bar-track">
-    <div class="goal-bar-fill" style="width: {Math.min($goalPct, 100)}%"
-      class:goal-bar-done={isGoalMet}
-    ></div>
+<div class="goal-bar-fill" style="width: {Math.min($goalPct, 100)}%"
+  class:goal-bar-done={isGoalMet}
+  class:shimmer-active={!!$activeSession && !isGoalMet}
+></div>
   </div>
   <div class="goal-bottom-row">
-    <span class="goal-done-text">{fmtMin($todayMin)} logged</span>
+    <span class="goal-done-text">{fmtMin(displayTodayMin)} logged</span>
     <span class="goal-left-text">
-      {isGoalMet ? 'Complete ✓' : `${fmtMin(Math.max(0, ($char.dailyGoalMin ?? 480) - $todayMin))} remaining`}
+      {isGoalMet ? 'Complete ✓' : `${fmtMin(Math.max(0, ($char.dailyGoalMin ?? 480) - displayTodayMin))} remaining`}
     </span>
   </div>
 </div>
@@ -476,6 +669,7 @@ let ringSubText = $derived(
 {#if $todayLogs.length > 0}
   <div class="today-log">
     <p class="section-label">Today's Sessions ({$todayLogs.length})</p>
+    <div use:autoAnimate>
     {#each $todayLogs as entry (entry.id)}
       <div class="log-item animate-slide-up">
         <button
@@ -514,6 +708,7 @@ let ringSubText = $derived(
         {/if}
       </div>
     {/each}
+    </div>
   </div>
 {/if}
 
@@ -683,11 +878,11 @@ let ringSubText = $derived(
 {#if showSessionSheet}
   <div class="sheet-backdrop" role="dialog" aria-modal="true" aria-label="Active session">
     <button class="backdrop-dismiss" onclick={() => showSessionSheet = false} aria-label="Close"></button>
-    <div class="sheet animate-slide-up">
+    <div class="sheet animate-slide-up" style="padding-bottom: 100px;">
       <div class="sheet-handle"></div>
       <h2 class="sheet-title">Live Session</h2>
 
-      <div class="session-card surface-violet">
+      <div class="session-card surface-violet card-session-live">
         <div class="scard-row">
           <span class="scard-label">METHOD</span>
           <span class="scard-val">{$activeSession?.methodLabel ?? $activeSession?.method}</span>
@@ -710,34 +905,41 @@ let ringSubText = $derived(
 
       <!-- Adjust start time -->
       <div class="time-edit-block">
-        <p class="time-edit-hint">Forgot to start on time? Adjust it below.</p>
+        <p class="time-edit-hint">Forgot to start on time?</p>
         {#if showEditTime}
-          <div class="time-edit-col">
-            <div class="time-edit-row">
-              <input type="date" class="input-field time-date-input"
-                bind:value={editDateValue}
-                max={new Date().toISOString().slice(0,10)}
-              />
+          {#if editTimeSuccess}
+            <div class="time-success-banner">✓ Start time updated</div>
+          {:else}
+            <div class="time-edit-col">
+              <div class="time-edit-row">
+                <input type="date" class="input-field time-date-input"
+                  bind:value={editDateValue}
+                  max={new Date().toISOString().slice(0,10)}
+                />
+              </div>
+              <div class="time-edit-row">
+                <input type="time" class="input-field" bind:value={editTimeValue} />
+                <button class="btn-apply" onclick={applyEditTime}>Apply</button>
+                <button class="btn-x" onclick={() => { showEditTime = false; editTimeError = ''; }}>✕</button>
+              </div>
             </div>
-            <div class="time-edit-row">
-              <input type="time" class="input-field" bind:value={editTimeValue} />
-              <button class="btn-apply" onclick={applyEditTime}>Apply</button>
-              <button class="btn-x" onclick={() => showEditTime = false}>✕</button>
-            </div>
-          </div>
+            {#if editTimeError}
+              <p class="time-error-msg">{editTimeError}</p>
+            {/if}
+          {/if}
         {:else}
-          <button class="btn-ghost w-full" onclick={() => showEditTime = true}>
+          <button class="btn-ghost w-full" onclick={() => { showEditTime = true; editTimeError = ''; editTimeSuccess = false; }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
             </svg>
-            Edit Start Time
+            Adjust Start Time
           </button>
         {/if}
       </div>
 
       <button class="btn-primary btn-stop" onclick={handleStop}>⏹ Stop Session</button>
       <button class="btn-ghost" style="margin-top:8px" onclick={() => showSessionSheet = false}>
-        Keep Running
+        Back
       </button>
     </div>
   </div>
@@ -826,6 +1028,7 @@ let ringSubText = $derived(
   border-radius: var(--radius-pill);
   font-size: 13px;
   transition: all 200ms;
+  position: relative;
 }
 .streak-chip.lit {
   background: oklch(75% 0.19 55 / 0.1);
@@ -837,6 +1040,7 @@ let ringSubText = $derived(
 .ring-stage {
   display: flex; justify-content: center; align-items: center;
   padding: 4px 0;
+  transition: opacity 1.2s ease, filter 1.2s ease;
 }
 .ring-btn {
   background: none; border: none; cursor: pointer; padding: 0;
@@ -860,7 +1064,7 @@ let ringSubText = $derived(
 /* SVG text — must be :global since they're inside an SVG */
 :global(.rc-cta-top)  { font: 600 16px 'Inter Variable',sans-serif; fill: var(--color-text-3); }
 :global(.rc-cta-main) { font: 800 34px 'Inter Variable',sans-serif; fill: var(--color-text-1); }
-:global(.rc-timer)    { font: 800 28px 'Inter Variable',sans-serif; fill: var(--color-accent);  font-variant-numeric: tabular-nums; }
+:global(.rc-timer)    { font: 700 28px 'Geist Mono', monospace; fill: var(--color-accent); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 :global(.rc-total)    { font: 800 34px 'Inter Variable',sans-serif; fill: var(--color-text-1);  font-variant-numeric: tabular-nums; }
 :global(.rc-sub)      { font: 600 11px 'Inter Variable',sans-serif; fill: var(--color-text-3);  letter-spacing: 0.04em; }
 
@@ -888,11 +1092,35 @@ let ringSubText = $derived(
   transition: width 700ms cubic-bezier(0.34,1.56,0.64,1);
 }
 .goal-bar-done { background: linear-gradient(90deg, var(--color-ci-lo), var(--color-ci-hi)); }
+.shimmer-active {
+  position: relative;
+  overflow: hidden;
+}
+.shimmer-active::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    oklch(100% 0 0 / 0.45) 50%,
+    transparent 100%
+  );
+  animation: bar-shimmer 2.2s ease-in-out infinite;
+}
+@keyframes bar-shimmer {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(300%); }
+}
 .goal-bottom-row { display: flex; justify-content: space-between; }
 .goal-done-text, .goal-left-text { font-size: 11px; color: var(--color-text-3); font-variant-numeric: tabular-nums; }
 
 /* ── Lower actions ────────────────────────────────────────────────────── */
-.lower-actions { margin-bottom: 4px; }
+.lower-actions {
+  margin-bottom: 0;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--color-edge);
+}
 .btn-rest-day {
   padding: 10px 20px;
   background: var(--color-surface-2); border: 1px solid var(--color-edge);
@@ -910,7 +1138,11 @@ let ringSubText = $derived(
 .rest-toast { top: 112px !important; }
 
 /* ── Today log ────────────────────────────────────────────────────────── */
-.today-log { margin-top: 20px; }
+.today-log {
+  margin-top: 4px;
+  padding-top: 20px;
+  border-top: 1px solid var(--color-edge);
+}
 .log-item {
   background: var(--color-surface-1); border: 1px solid var(--color-edge);
   border-radius: var(--radius-md); margin-bottom: 6px; overflow: hidden;
@@ -1086,4 +1318,83 @@ let ringSubText = $derived(
     color: var(--color-accent);
   }
   .past-err { font-size: 11px; color: var(--color-critical); text-align: center; margin-top: 4px; }
+  .time-error-msg { font-size: 11px; color: var(--color-critical);
+    text-align: center; margin-top: 6px; font-weight: 600; }
+  .time-success-banner {
+    text-align: center; padding: 12px;
+    background: var(--color-positive-bg); border: 1px solid var(--color-positive-ring);
+    border-radius: var(--radius-md); font-size: 13px; font-weight: 700;
+    color: var(--color-positive);
+  }
+
+  /* ── Live session card pulse ──────────────────────────────────────────── */
+  .card-session-live {
+    animation: session-pulse 2.8s ease-in-out infinite;
+  }
+  @keyframes session-pulse {
+    0%, 100% {
+      box-shadow:
+        inset 0 1px 0 oklch(100% 0 0 / 0.06),
+        0 0 0 1px var(--color-accent-ring),
+        0 0 14px oklch(72% 0.22 292 / 0.15);
+    }
+    50% {
+      box-shadow:
+        inset 0 1px 0 oklch(100% 0 0 / 0.06),
+        0 0 0 1px var(--color-accent),
+        0 0 28px oklch(72% 0.22 292 / 0.35);
+    }
+  }
+
+.ring-stage {
+  display: flex; justify-content: center; align-items: center;
+  padding: 4px 0;
+  transition: opacity 1.2s ease, filter 1.2s ease;
+}
+
+  /* ── Milestone overlay ────────────────────────────────────────────────── */
+  .milestone-overlay {
+    position: fixed; inset: 0; z-index: 65;
+    background: oklch(5% 0.02 280 / 0.93);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 32px; cursor: pointer;
+  }
+  .milestone-content {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 18px; text-align: center; max-width: 300px;
+  }
+  .milestone-emoji {
+    font-size: 76px; line-height: 1;
+    filter: drop-shadow(0 0 36px oklch(75% 0.19 55 / 0.65));
+    animation: ms-emoji-pop 700ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  @keyframes ms-emoji-pop {
+    0%   { transform: scale(0) rotate(-15deg); opacity: 0; }
+    60%  { transform: scale(1.22) rotate(5deg); }
+    100% { transform: scale(1) rotate(0deg); opacity: 1; }
+  }
+  .milestone-title {
+    font-family: var(--font-display); font-size: 30px; font-weight: 800;
+    color: var(--color-ci); line-height: 1.1;
+    text-shadow: 0 0 40px oklch(75% 0.19 55 / 0.5);
+  }
+  .milestone-msg {
+    font-size: 15px; line-height: 1.75; color: var(--color-text-2); font-weight: 400;
+  }
+  .milestone-prog-wrap {
+    width: 100%; height: 3px; background: oklch(100% 0 0 / 0.1);
+    border-radius: var(--radius-pill); overflow: hidden; margin-top: 4px;
+  }
+  .milestone-prog-bar {
+    height: 100%; background: var(--color-ci);
+    border-radius: var(--radius-pill);
+    animation: ms-drain 5.2s linear forwards;
+  }
+  @keyframes ms-drain { from { width: 100%; } to { width: 0%; } }
+  .milestone-hint {
+    font-size: 10px; color: var(--color-text-4); font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+  }
 </style>

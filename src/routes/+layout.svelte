@@ -7,6 +7,10 @@
   import { fly } from 'svelte/transition';
   import { cubicOut, cubicIn } from 'svelte/easing';
 
+// ── Lottie — browser-only import (SSR safe) ──────────────
+import { browser } from '$app/environment';
+import { char } from '$lib/stores/profile.js';
+
   // SVELTE 5: Destructure children from props
   let { children } = $props();
 
@@ -16,7 +20,7 @@
   let direction    = $derived(tabIndex >= prevTabIndex ? 1 : -1);
 
   // Placeholder values for now
-  const ciLabel = 'CI-0';
+  let ciLabel = $derived(`CI-${$char.ciCurrent ?? 0}`);
 </script>
 
 <div class="app-shell">

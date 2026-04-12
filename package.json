@@ -17,9 +17,16 @@
 		"vite": "^7.3.1"
 	},
 	"dependencies": {
+		"@fontsource-variable/dm-sans": "^5.2.8",
 		"@fontsource-variable/inter": "^5.2.8",
+		"@fontsource-variable/syne": "^5.2.7",
 		"@fontsource/cinzel": "^5.2.8",
+		"@fontsource/geist-mono": "^5.2.7",
+		"@fontsource/space-grotesk": "^5.2.10",
+		"@formkit/auto-animate": "^0.9.0",
+		"@lottiefiles/dotlottie-svelte": "^0.9.11",
 		"@tailwindcss/vite": "^4.2.2",
+		"gsap": "^3.14.2",
 		"tailwindcss": "^4.2.2"
 	}
 }
