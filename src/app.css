@@ -513,3 +513,53 @@ body {
 @keyframes border-spin {
   to { --border-angle: 360deg; }
 }
+
+/* ── Featured card glow pulse ────────────────────────────────────────── */
+.card-featured {
+  animation: card-glow-pulse 4s ease-in-out infinite;
+}
+@keyframes card-glow-pulse {
+  0%, 100% {
+    box-shadow: var(--shadow-card),
+      0 0 0 1px oklch(72% 0.22 292 / 0.2),
+      0 0 20px oklch(72% 0.22 292 / 0.06);
+  }
+  50% {
+    box-shadow: var(--shadow-card),
+      0 0 0 1px oklch(72% 0.22 292 / 0.5),
+      0 0 32px oklch(72% 0.22 292 / 0.18);
+  }
+}
+
+.card-featured-ci {
+  animation: card-glow-pulse-ci 4s ease-in-out infinite;
+}
+@keyframes card-glow-pulse-ci {
+  0%, 100% {
+    box-shadow: 0 0 0 1px oklch(75% 0.19 55 / 0.2),
+      0 0 20px oklch(75% 0.19 55 / 0.06);
+  }
+  50% {
+    box-shadow: 0 0 0 1px oklch(75% 0.19 55 / 0.5),
+      0 0 32px oklch(75% 0.19 55 / 0.18);
+  }
+}
+
+/* ── Rest day ambient overlay ────────────────────────────────────────── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 110% 65% at 25% 10%,
+      oklch(42% 0.2 55) 0%, transparent 65%),
+    radial-gradient(ellipse 70% 50% at 75% 85%,
+      oklch(32% 0.16 30) 0%, transparent 60%);
+  opacity: 0;
+  transition: opacity 1.6s ease;
+  mix-blend-mode: screen;
+}
+body.rest-day-mode::before {
+  opacity: 0.5;
+}

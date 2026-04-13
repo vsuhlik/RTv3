@@ -7,12 +7,12 @@
   import { char }        from '$lib/stores/profile.js';
   import { logs }        from '$lib/stores/logs.js';
   import { activeSession, timerSecs, startTimer, stopTimer, updateSessionStart } from '$lib/stores/timer.js';
-import { todayLogs, todayMin, goalPct, isRestDay, todayStr } from '$lib/stores/derived.js';
-import LottieIcon from '$lib/components/LottieIcon.svelte';
-import autoAnimate from '@formkit/auto-animate';
-import { gsap } from 'gsap';
-import { fade } from 'svelte/transition';
-import { browser } from '$app/environment';
+  import { todayLogs, todayMin, goalPct, isRestDay, todayStr } from '$lib/stores/derived.js';
+  import LottieIcon from '$lib/components/LottieIcon.svelte';
+  import autoAnimate from '@formkit/auto-animate';
+  import { gsap } from 'gsap';
+  import { fade } from 'svelte/transition';
+  import { browser } from '$app/environment';
 
   // ── Ring geometry ─────────────────────────────────────────────────────
   const R = 108, CX = 140, CY = 140;
